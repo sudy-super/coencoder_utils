@@ -236,10 +236,17 @@ def move_random_samples(eval_dataset, train_dataset, num_samples=4500):
 
     return train_dataset, remaining_eval_subset
 
+# 評価データセットから4000件をトレーニングデータセットに移す
+train_data, eval_data = move_random_samples(val_data, train_data, num_samples=4000)
 
+num_train_samples = int(0.6 * len(train_data))
+train_data_used = train_data.select(range(num_train_samples))
+train_data_unused = train_data.select(range(num_train_samples, len(train_data)))
 
-# 評価データセットから4500件をトレーニングデータセットに移す
-train_data, eval_data = move_random_samples(val_data, train_data, num_samples=4500)
+num_eval_samples = int(0.6 * len(eval_data))
+eval_data_used = eval_data.select(range(num_eval_samples))
+eval_data_unused = eval_data.select(range(num_eval_samples, len(eval_data)))
+
 
 # サンプルの長さに基づいてデータをソートし、バッチを形成するためのカスタムサンプラー
 from torch.utils.data import Sampler
@@ -344,8 +351,8 @@ args = TrainingArguments(
 trainer = CustomTrainer(
     model=model,
     args=args,
-    train_dataset=train_data,
-    eval_dataset=eval_data,
+    train_dataset=train_data_used,
+    eval_dataset=eval_data_used,
     data_collator=data_collator,
 )
 
