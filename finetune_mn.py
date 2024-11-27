@@ -331,7 +331,6 @@ args = TrainingArguments(
     warmup_ratio=0.03,
     disable_tqdm=False,  # tqdmの進捗バーを有効化
     logging_steps=1,  # ロギング頻度を設定
-    logging_level="info",  # ロギングレベルを設定
     log_level="info",
     save_strategy="steps",
     eval_steps=135,
