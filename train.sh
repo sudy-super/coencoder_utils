@@ -5,6 +5,7 @@ export NCCL_IB_DISABLE=1
 export NCCL_DEBUG="TRACE"
 export NCCL_SOCKET_IFNAME=^lo,docker,virbr,vmnet,vboxnet,eth0
 export NCCL_P2P_DISABLE=1
+export NCCL_SHM_DISABLE=1
 export MASTER_ADDR=10.1.201.02
 export MASTER_PORT=29500
 
