@@ -13,4 +13,4 @@ export NCCL_SHM_DISABLE=0
 export MASTER_ADDR=10.1.201.21
 export MASTER_PORT=29500
 
-deepspeed --hostfile=hostfile --num_nodes=4 --num_gpus=8 finetune_mn.py --deepspeed ds_config_mn.json
+deepspeed --hostfile=hostfile --num_nodes=3 --num_gpus=8 finetune_mn.py --deepspeed ds_config_mn.json
