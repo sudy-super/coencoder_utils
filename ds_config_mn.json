@@ -44,7 +44,7 @@
         }
     },
     "pipeline": {
-        "pipeline_model_parallel_size": 24,
+        "pipeline_model_parallel_size": 32,
         "activation_checkpoint_interval": 0,
         "prescale_gradients": true
     },

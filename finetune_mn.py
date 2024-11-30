@@ -1,6 +1,6 @@
 import random
 from torch.utils.data import Dataset, Subset
-from transformers import Trainer, TrainingArguments
+from transformers import Trainer, TrainingArguments, logging
 import torch
 from datasets import load_dataset
 import wandb
@@ -395,12 +395,16 @@ class CustomTrainer(Trainer):
         
         return result
 
+# Hugging Faceの進捗バーを強制的に有効化
+logging.set_verbosity_info()
+logging.enable_progress_bar()
+
 # トレーニング引数の設定
 args = TrainingArguments(
     num_train_epochs=1,
     per_device_train_batch_size=1,
     per_device_eval_batch_size=1,
-    gradient_accumulation_steps=8,
+    gradient_accumulation_steps=2,
     learning_rate=1e-3,
     adam_beta2=0.95,
     weight_decay=0.0,
