@@ -100,7 +100,7 @@ Today Date: 9 Nov 2024
 # `tokenize`関数をバッチ処理に対応
 def tokenize(batch):
     # 最大トークン数の設定
-    max_context_tokens = 131072
+    max_context_tokens = 98304
 
     # 各サンプルに対してcontextのトークン数を確認し、必要に応じてカット
     truncated_contexts = []
