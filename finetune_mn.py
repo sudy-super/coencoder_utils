@@ -299,8 +299,7 @@ for i in range(len(first_batch)):
 """
 
 from torch.utils.data import DataLoader
-
-import torch.distributed as dist
+from queue import Queue
 
 class NetworkMonitor:
     def __init__(self, rank, world_size):
@@ -308,32 +307,13 @@ class NetworkMonitor:
         self.world_size = world_size
         self.running = True
         self.previous_bytes = self._get_network_stats()
-        self.lock = threading.Lock()
-        self.last_log_time = time.time()
+        self.metrics_queue = Queue()
         
     def _get_network_stats(self):
-        # Get NCCL statistics from debug output
-        nccl_stats = {}
-        try:
-            with open(f"/tmp/nccl_debug_rank_{self.rank}.log", "r") as f:
-                logs = f.readlines()
-                for line in logs:
-                    if "Send" in line:
-                        match = re.search(r"Size: (\d+)", line)
-                        if match:
-                            nccl_stats['send_bytes'] = nccl_stats.get('send_bytes', 0) + int(match.group(1))
-                    if "Recv" in line:
-                        match = re.search(r"Size: (\d+)", line)
-                        if match:
-                            nccl_stats['recv_bytes'] = nccl_stats.get('recv_bytes', 0) + int(match.group(1))
-        except FileNotFoundError:
-            pass
-
-        # Get general network interface statistics
         net_io = psutil.net_io_counters()
         return {
-            'bytes_sent': net_io.bytes_sent + nccl_stats.get('send_bytes', 0),
-            'bytes_recv': net_io.bytes_recv + nccl_stats.get('recv_bytes', 0),
+            'bytes_sent': net_io.bytes_sent,
+            'bytes_recv': net_io.bytes_recv,
             'timestamp': time.time()
         }
 
@@ -346,61 +326,25 @@ class NetworkMonitor:
         recv_bandwidth = (current_bytes['bytes_recv'] - previous_bytes['bytes_recv']) / time_diff
         return sent_bandwidth, recv_bandwidth
 
-    def log_metrics(self, metrics):
-        # グローバルランク0のプロセスのみがwandbにログを送信
-        if dist.get_rank() == 0:
-            wandb.log(metrics, commit=True)
-
-    def gather_all_nodes_metrics(self, local_metrics):
-        # 各ノードのメトリクスを収集
-        all_metrics = [None] * self.world_size
-        dist.all_gather_object(all_metrics, local_metrics)
-        return all_metrics
-
     def monitor(self):
         while self.running:
-            with self.lock:
-                current_time = time.time()
-                current_bytes = self._get_network_stats()
-                
-                # 1秒ごとにメトリクスを計算
-                if current_time - self.last_log_time >= 1.0:
-                    sent_bandwidth, recv_bandwidth = self.calculate_bandwidth(
-                        current_bytes, self.previous_bytes
-                    )
-                    
-                    local_metrics = {
-                        'rank': self.rank,
-                        'send_bandwidth_mbps': sent_bandwidth / (1024 * 1024),
-                        'recv_bandwidth_mbps': recv_bandwidth / (1024 * 1024),
-                        'total_sent_gb': current_bytes['bytes_sent'] / (1024 * 1024 * 1024),
-                        'total_recv_gb': current_bytes['bytes_recv'] / (1024 * 1024 * 1024),
-                        'timestamp': current_time
-                    }
-                    
-                    # 全ノードのメトリクスを収集
-                    all_metrics = self.gather_all_nodes_metrics(local_metrics)
-                    
-                    # ランク0のプロセスのみがログを記録
-                    if self.rank == 0:
-                        metrics_to_log = {}
-                        for node_metrics in all_metrics:
-                            node_rank = node_metrics['rank']
-                            metrics_to_log.update({
-                                f'network/node_{node_rank}/send_bandwidth_mbps': node_metrics['send_bandwidth_mbps'],
-                                f'network/node_{node_rank}/recv_bandwidth_mbps': node_metrics['recv_bandwidth_mbps'],
-                                f'network/node_{node_rank}/total_sent_gb': node_metrics['total_sent_gb'],
-                                f'network/node_{node_rank}/total_recv_gb': node_metrics['total_recv_gb']
-                            })
-                        self.log_metrics(metrics_to_log)
-                    
-                    self.previous_bytes = current_bytes
-                    self.last_log_time = current_time
-                
-                # スリープ時間を動的に調整して1秒間隔を維持
-                sleep_time = max(0, 1.0 - (time.time() - current_time))
-                if sleep_time > 0:
-                    time.sleep(sleep_time)
+            current_bytes = self._get_network_stats()
+            sent_bandwidth, recv_bandwidth = self.calculate_bandwidth(
+                current_bytes, self.previous_bytes
+            )
+            
+            metrics = {
+                'rank': self.rank,
+                'send_bandwidth_mbps': sent_bandwidth / (1024 * 1024),
+                'recv_bandwidth_mbps': recv_bandwidth / (1024 * 1024),
+                'total_sent_gb': current_bytes['bytes_sent'] / (1024 * 1024 * 1024),
+                'total_recv_gb': current_bytes['bytes_recv'] / (1024 * 1024 * 1024),
+                'timestamp': current_bytes['timestamp']
+            }
+            
+            self.metrics_queue.put(metrics)
+            self.previous_bytes = current_bytes
+            time.sleep(1.0)  # 1秒間隔での測定
 
     def stop(self):
         self.running = False
@@ -408,45 +352,48 @@ class NetworkMonitor:
 class CustomTrainer(Trainer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # ワールドサイズを取得してNetworkMonitorに渡す
         self.network_monitor = NetworkMonitor(dist.get_rank(), dist.get_world_size())
         self.monitor_thread = None
+        self.last_log_time = time.time()
+
+    def log_network_metrics(self):
+        if dist.get_rank() == 0:
+            current_time = time.time()
+            if current_time - self.last_log_time >= 1.0:  # 1秒ごとにログ
+                try:
+                    metrics = self.network_monitor.metrics_queue.get_nowait()
+                    wandb.log({
+                        f'network/node_{metrics["rank"]}/send_bandwidth_mbps': metrics['send_bandwidth_mbps'],
+                        f'network/node_{metrics["rank"]}/recv_bandwidth_mbps': metrics['recv_bandwidth_mbps'],
+                        f'network/node_{metrics["rank"]}/total_sent_gb': metrics['total_sent_gb'],
+                        f'network/node_{metrics["rank"]}/total_recv_gb': metrics['total_recv_gb']
+                    })
+                    self.last_log_time = current_time
+                except Queue.Empty:
+                    pass
+
+    def training_step(self, *args, **kwargs):
+        # 通常のトレーニングステップを実行
+        loss = super().training_step(*args, **kwargs)
+        # メトリクスのログ記録
+        self.log_network_metrics()
+        return loss
 
     def train(self, *args, **kwargs):
-        # Start network monitoring in a separate thread
+        # モニタリングスレッドの開始
         self.monitor_thread = threading.Thread(target=self.network_monitor.monitor)
-        self.monitor_thread.daemon = True  # メインスレッドが終了したら監視も終了
+        self.monitor_thread.daemon = True
         self.monitor_thread.start()
         
         try:
             result = super().train(*args, **kwargs)
         finally:
-            # Ensure monitoring is stopped when training ends
+            # モニタリングの停止
             self.network_monitor.stop()
             if self.monitor_thread:
-                self.monitor_thread.join(timeout=5)  # 最大5秒待機
+                self.monitor_thread.join(timeout=5)
         
         return result
-
-    def get_train_dataloader(self):
-        if self.train_dataset is None:
-            raise ValueError("Trainer: training requires a train_dataset.")
-
-        lengths = self.train_dataset["length"]
-        sampler = GroupedLengthSampler(
-            lengths=lengths,
-            batch_size=self.args.per_device_train_batch_size,
-            shuffle=True
-        )
-
-        return DataLoader(
-            self.train_dataset,
-            batch_size=self.args.per_device_train_batch_size,
-            sampler=sampler,
-            collate_fn=self.data_collator,
-            num_workers=self.args.dataloader_num_workers,
-            pin_memory=self.args.dataloader_pin_memory,
-        )
 
 # トレーニング引数の設定
 args = TrainingArguments(
