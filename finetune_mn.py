@@ -455,7 +455,7 @@ args = TrainingArguments(
     dataloader_pin_memory=True,
     dataloader_num_workers=4,
     local_rank=int(os.environ.get("LOCAL_RANK", -1)),
-    group_by_length=True,
+    # group_by_length=True,
 )
 
 # Trainerの設定
