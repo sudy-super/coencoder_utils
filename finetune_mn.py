@@ -373,12 +373,27 @@ class CustomTrainer(Trainer):
                 except Queue.Empty:
                     pass
 
-    def training_step(self, *args, **kwargs):
-        # 通常のトレーニングステップを実行
-        loss = super().training_step(*args, **kwargs)
-        # メトリクスのログ記録
-        self.log_network_metrics()
-        return loss
+    def training_step(self, model, inputs):
+        try:
+            # 通常のトレーニングステップを実行
+            loss = super().training_step(model, inputs)
+            # メトリクスのログ記録
+            self.log_network_metrics()
+            return loss
+        except Exception as e:
+            # エラーが発生した場合、データの長さを出力
+            input_ids = inputs.get('input_ids', None)
+            context_input_ids = inputs.get('context_input_ids', None)
+            if input_ids is not None:
+                text_lengths = [len(ids) for ids in input_ids]
+                print(f"Error occurred during training on batch with text lengths: {text_lengths}")
+            if context_input_ids is not None:
+                context_lengths = [len(ids) for ids in context_input_ids]
+                print(f"Error occurred during training on batch with context lengths: {context_lengths}")
+            else:
+                print("Error occurred during training but could not retrieve input_ids or context_input_ids")
+            # 例外を再度発生させる
+            raise e
 
     def train(self, *args, **kwargs):
         # モニタリングスレッドの開始
@@ -425,7 +440,7 @@ args = TrainingArguments(
     num_train_epochs=1,
     per_device_train_batch_size=1,
     per_device_eval_batch_size=1,
-    gradient_accumulation_steps=2,
+    gradient_accumulation_steps=64,
     learning_rate=1e-3,
     adam_beta2=0.95,
     weight_decay=0.0,
