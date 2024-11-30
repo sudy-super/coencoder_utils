@@ -106,7 +106,7 @@ class CoEncoderDualTokenizer(ProcessorMixin):
             context_features = self.context_tokenizer(
                 context,
                 return_tensors=return_tensors,
-                **kwargs.get("context_kwargs", {})
+                **kwargs
             )
             features.update({f"context_{k}": v for k, v in context_features.items()})
 
@@ -114,7 +114,7 @@ class CoEncoderDualTokenizer(ProcessorMixin):
             text_features = self.text_tokenizer(
                 text,
                 return_tensors=return_tensors,
-                **kwargs.get("text_kwargs", {})
+                **kwargs
             )
             features.update({k: v for k, v in text_features.items()})
 
