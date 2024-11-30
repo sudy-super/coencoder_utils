@@ -418,6 +418,30 @@ class CustomTrainer(Trainer):
                 self.monitor_thread.join(timeout=5)
         
         return result
+    
+    def get_train_dataloader(self):
+        if self.train_dataset is None:
+            raise ValueError("Trainer: training requires a train_dataset.")
+
+        # サンプルの長さを取得
+        lengths = self.train_dataset["length"]
+
+        # カスタムサンプラーを作成
+        sampler = GroupedLengthSampler(
+            lengths=lengths,
+            batch_size=self.args.per_device_train_batch_size,
+            shuffle=False
+        )
+
+        # データローダーを作成
+        return DataLoader(
+            self.train_dataset,
+            batch_size=self.args.per_device_train_batch_size,
+            sampler=sampler,
+            collate_fn=self.data_collator,
+            num_workers=self.args.dataloader_num_workers,
+            pin_memory=self.args.dataloader_pin_memory,
+        )
 
 # Hugging Faceの進捗バーを強制的に有効化
 logging.set_verbosity_info()
@@ -428,7 +452,7 @@ args = TrainingArguments(
     num_train_epochs=1,
     per_device_train_batch_size=1,
     per_device_eval_batch_size=1,
-    gradient_accumulation_steps=2,
+    gradient_accumulation_steps=64,
     learning_rate=1e-3,
     adam_beta2=0.95,
     weight_decay=0.0,
