@@ -257,66 +257,35 @@ eval_data_unused = eval_data.select(range(num_eval_samples, len(eval_data)))
 
 # サンプルの長さに基づいてデータをソートし、バッチを形成するためのカスタムサンプラー
 from torch.utils.data import Sampler
-import torch.distributed as dist
-import math
+import numpy as np
 
-class DistributedGroupedLengthSampler(Sampler):
-    def __init__(self, dataset, batch_size, lengths, shuffle=False, seed=42):
-        self.dataset = dataset
-        self.batch_size = batch_size
+class GroupedLengthSampler(Sampler):
+    def __init__(self, lengths, batch_size, shuffle=True):
         self.lengths = lengths
+        self.batch_size = batch_size
         self.shuffle = shuffle
-        self.seed = seed
 
-        # 分散関連の設定
-        if dist.is_available() and dist.is_initialized():
-            self.num_replicas = dist.get_world_size()
-            self.rank = dist.get_rank()
-        else:
-            self.num_replicas = 1
-            self.rank = 0
-
-        self.total_size = len(self.lengths)
-        self.num_samples = int(math.ceil(self.total_size * 1.0 / self.num_replicas))
-        self.create_batches()
-
-    def create_batches(self):
         # インデックスと長さを取得
-        indices_lengths = list(enumerate(self.lengths))
+        self.indices_lengths = list(enumerate(self.lengths))
 
-        # シャッフル
-        if self.shuffle:
-            g = torch.Generator()
-            g.manual_seed(self.seed)
-            indices_lengths = [indices_lengths[i] for i in torch.randperm(len(indices_lengths), generator=g)]
-
-        # 長さでソート
-        indices_lengths.sort(key=lambda x: x[1])
+        # 長さに基づいてソート
+        self.indices_lengths.sort(key=lambda x: x[1])
 
         # バッチを形成
-        batches = [indices_lengths[i:i + self.batch_size] for i in range(0, len(indices_lengths), self.batch_size)]
+        self.batches = [self.indices_lengths[i:i + self.batch_size] for i in range(0, len(self.indices_lengths), self.batch_size)]
 
-        # 各バッチをシャッフル
         if self.shuffle:
-            random.seed(self.seed)
-            random.shuffle(batches)
+            random.seed(42)
+            random.shuffle(self.batches)
 
         # フラットなインデックスリストを作成
-        self.indices = [idx for batch in batches for idx, _ in batch]
-
-        # サンプル数を調整
-        self.num_samples = int(math.ceil(len(self.indices) / self.num_replicas))
-
-        # 自身の担当部分を取得
-        self.offset = self.num_samples * self.rank
-        self.indices = self.indices[self.offset:self.offset + self.num_samples]
+        self.indices = [idx for batch in self.batches for idx, _ in batch]
 
     def __iter__(self):
         return iter(self.indices)
 
     def __len__(self):
-        return self.num_samples
-
+        return len(self.indices)
 
 
 
@@ -431,7 +400,7 @@ class CustomTrainer(Trainer):
                 print("Error occurred during training but could not retrieve input_ids or context_input_ids")
             # 例外を再度発生させる
             raise e
-    
+
     def train(self, *args, **kwargs):
         # モニタリングスレッドの開始
         self.monitor_thread = threading.Thread(target=self.network_monitor.monitor)
@@ -447,22 +416,6 @@ class CustomTrainer(Trainer):
                 self.monitor_thread.join(timeout=5)
         
         return result
-    
-    def _get_train_sampler(self):
-        if self.train_dataset is None or not hasattr(self.train_dataset, '__len__'):
-            return None
-
-        lengths = self.train_dataset["length"]
-
-        sampler = DistributedGroupedLengthSampler(
-            dataset=self.train_dataset,
-            batch_size=self.args.per_device_train_batch_size,
-            lengths=lengths,
-            shuffle=False,
-            seed=42
-        )
-        return sampler
-
 
 # Hugging Faceの進捗バーを強制的に有効化
 logging.set_verbosity_info()
@@ -500,6 +453,7 @@ args = TrainingArguments(
     dataloader_pin_memory=True,
     dataloader_num_workers=4,
     local_rank=int(os.environ.get("LOCAL_RANK", -1)),
+    group_by_length=True,
 )
 
 # Trainerの設定
