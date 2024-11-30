@@ -275,6 +275,7 @@ class GroupedLengthSampler(Sampler):
         self.batches = [self.indices_lengths[i:i + self.batch_size] for i in range(0, len(self.indices_lengths), self.batch_size)]
 
         if self.shuffle:
+            random.seed(42)
             random.shuffle(self.batches)
 
         # フラットなインデックスリストを作成
@@ -394,6 +395,26 @@ class CustomTrainer(Trainer):
                 self.monitor_thread.join(timeout=5)
         
         return result
+    
+    def get_train_dataloader(self):
+        if self.train_dataset is None:
+            raise ValueError("Trainer: training requires a train_dataset.")
+
+        lengths = self.train_dataset["length"]
+        sampler = GroupedLengthSampler(
+            lengths=lengths,
+            batch_size=self.args.per_device_train_batch_size,
+            shuffle=True
+        )
+
+        return DataLoader(
+            self.train_dataset,
+            batch_size=self.args.per_device_train_batch_size,
+            sampler=sampler,
+            collate_fn=self.data_collator,
+            num_workers=self.args.dataloader_num_workers,
+            pin_memory=self.args.dataloader_pin_memory,
+        )
 
 # Hugging Faceの進捗バーを強制的に有効化
 logging.set_verbosity_info()
