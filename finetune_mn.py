@@ -303,10 +303,13 @@ from torch.utils.data import DataLoader
 import torch.distributed as dist
 
 class NetworkMonitor:
-    def __init__(self, rank):
+    def __init__(self, rank, world_size):
         self.rank = rank
+        self.world_size = world_size
         self.running = True
         self.previous_bytes = self._get_network_stats()
+        self.lock = threading.Lock()
+        self.last_log_time = time.time()
         
     def _get_network_stats(self):
         # Get NCCL statistics from debug output
@@ -330,32 +333,74 @@ class NetworkMonitor:
         net_io = psutil.net_io_counters()
         return {
             'bytes_sent': net_io.bytes_sent + nccl_stats.get('send_bytes', 0),
-            'bytes_recv': net_io.bytes_recv + nccl_stats.get('recv_bytes', 0)
+            'bytes_recv': net_io.bytes_recv + nccl_stats.get('recv_bytes', 0),
+            'timestamp': time.time()
         }
 
-    def calculate_bandwidth(self, current_bytes, previous_bytes, interval):
-        sent_bandwidth = (current_bytes['bytes_sent'] - previous_bytes['bytes_sent']) / interval
-        recv_bandwidth = (current_bytes['bytes_recv'] - previous_bytes['bytes_recv']) / interval
+    def calculate_bandwidth(self, current_bytes, previous_bytes):
+        time_diff = current_bytes['timestamp'] - previous_bytes['timestamp']
+        if time_diff == 0:
+            return 0, 0
+            
+        sent_bandwidth = (current_bytes['bytes_sent'] - previous_bytes['bytes_sent']) / time_diff
+        recv_bandwidth = (current_bytes['bytes_recv'] - previous_bytes['bytes_recv']) / time_diff
         return sent_bandwidth, recv_bandwidth
 
-    def monitor(self, interval=1.0):
+    def log_metrics(self, metrics):
+        # グローバルランク0のプロセスのみがwandbにログを送信
+        if dist.get_rank() == 0:
+            wandb.log(metrics, commit=True)
+
+    def gather_all_nodes_metrics(self, local_metrics):
+        # 各ノードのメトリクスを収集
+        all_metrics = [None] * self.world_size
+        dist.all_gather_object(all_metrics, local_metrics)
+        return all_metrics
+
+    def monitor(self):
         while self.running:
-            current_bytes = self._get_network_stats()
-            sent_bandwidth, recv_bandwidth = self.calculate_bandwidth(
-                current_bytes, self.previous_bytes, interval
-            )
-            
-            # Only log from rank 0 to avoid duplicate logging
-            if dist.get_rank() == 0:
-                wandb.log({
-                    f'network/node_{self.rank}/send_bandwidth_mbps': sent_bandwidth / (1024 * 1024),
-                    f'network/node_{self.rank}/recv_bandwidth_mbps': recv_bandwidth / (1024 * 1024),
-                    f'network/node_{self.rank}/total_sent_gb': current_bytes['bytes_sent'] / (1024 * 1024 * 1024),
-                    f'network/node_{self.rank}/total_recv_gb': current_bytes['bytes_recv'] / (1024 * 1024 * 1024),
-                })
-            
-            self.previous_bytes = current_bytes
-            time.sleep(interval)
+            with self.lock:
+                current_time = time.time()
+                current_bytes = self._get_network_stats()
+                
+                # 1秒ごとにメトリクスを計算
+                if current_time - self.last_log_time >= 1.0:
+                    sent_bandwidth, recv_bandwidth = self.calculate_bandwidth(
+                        current_bytes, self.previous_bytes
+                    )
+                    
+                    local_metrics = {
+                        'rank': self.rank,
+                        'send_bandwidth_mbps': sent_bandwidth / (1024 * 1024),
+                        'recv_bandwidth_mbps': recv_bandwidth / (1024 * 1024),
+                        'total_sent_gb': current_bytes['bytes_sent'] / (1024 * 1024 * 1024),
+                        'total_recv_gb': current_bytes['bytes_recv'] / (1024 * 1024 * 1024),
+                        'timestamp': current_time
+                    }
+                    
+                    # 全ノードのメトリクスを収集
+                    all_metrics = self.gather_all_nodes_metrics(local_metrics)
+                    
+                    # ランク0のプロセスのみがログを記録
+                    if self.rank == 0:
+                        metrics_to_log = {}
+                        for node_metrics in all_metrics:
+                            node_rank = node_metrics['rank']
+                            metrics_to_log.update({
+                                f'network/node_{node_rank}/send_bandwidth_mbps': node_metrics['send_bandwidth_mbps'],
+                                f'network/node_{node_rank}/recv_bandwidth_mbps': node_metrics['recv_bandwidth_mbps'],
+                                f'network/node_{node_rank}/total_sent_gb': node_metrics['total_sent_gb'],
+                                f'network/node_{node_rank}/total_recv_gb': node_metrics['total_recv_gb']
+                            })
+                        self.log_metrics(metrics_to_log)
+                    
+                    self.previous_bytes = current_bytes
+                    self.last_log_time = current_time
+                
+                # スリープ時間を動的に調整して1秒間隔を維持
+                sleep_time = max(0, 1.0 - (time.time() - current_time))
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
 
     def stop(self):
         self.running = False
@@ -363,12 +408,14 @@ class NetworkMonitor:
 class CustomTrainer(Trainer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.network_monitor = NetworkMonitor(dist.get_rank())
+        # ワールドサイズを取得してNetworkMonitorに渡す
+        self.network_monitor = NetworkMonitor(dist.get_rank(), dist.get_world_size())
         self.monitor_thread = None
 
     def train(self, *args, **kwargs):
         # Start network monitoring in a separate thread
         self.monitor_thread = threading.Thread(target=self.network_monitor.monitor)
+        self.monitor_thread.daemon = True  # メインスレッドが終了したら監視も終了
         self.monitor_thread.start()
         
         try:
@@ -377,7 +424,7 @@ class CustomTrainer(Trainer):
             # Ensure monitoring is stopped when training ends
             self.network_monitor.stop()
             if self.monitor_thread:
-                self.monitor_thread.join()
+                self.monitor_thread.join(timeout=5)  # 最大5秒待機
         
         return result
 
