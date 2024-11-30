@@ -426,6 +426,7 @@ args = TrainingArguments(
     optim="adamw_torch_fused",
     dataloader_pin_memory=True,
     dataloader_num_workers=4,
+    local_rank=int(os.environ.get("LOCAL_RANK", -1)),
 )
 
 # Trainerの設定
