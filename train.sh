@@ -10,7 +10,7 @@ export NCCL_SOCKET_IFNAME=^lo,docker,virbr,vmnet,vboxnet,eth0
 export NCCL_P2P_DISABLE=0
 export NCCL_P2P_LEVEL=SYS
 export NCCL_SHM_DISABLE=0
-export MASTER_ADDR=10.1.201.21
+export MASTER_ADDR=10.1.201.17
 export MASTER_PORT=29500
 export NCCL_DEBUG_FILE="/tmp/nccl_debug_rank_%r.log"
 
