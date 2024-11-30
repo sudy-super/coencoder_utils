@@ -117,7 +117,7 @@ def tokenize(batch):
         context=truncated_contexts,
         text=batch['text'],
         truncation=True,
-        max_length=131072,
+        max_length=max_context_tokens,
         padding=False,
     )
 
@@ -253,6 +253,8 @@ train_data_unused = train_data.select(range(num_train_samples, len(train_data)))
 num_eval_samples = int(0.6 * len(eval_data))
 eval_data_used = eval_data.select(range(num_eval_samples))
 eval_data_unused = eval_data.select(range(num_eval_samples, len(eval_data)))
+
+train_data_sorted = train_data_used.sort('length')
 
 
 # サンプルの長さに基づいてデータをソートし、バッチを形成するためのカスタムサンプラー
@@ -460,7 +462,7 @@ args = TrainingArguments(
 trainer = CustomTrainer(
     model=model,
     args=args,
-    train_dataset=train_data_used,
+    train_dataset=train_data_sorted,
     eval_dataset=eval_data_used,
     data_collator=data_collator,
 )
