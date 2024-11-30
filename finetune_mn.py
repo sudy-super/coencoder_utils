@@ -254,6 +254,9 @@ num_eval_samples = int(0.6 * len(eval_data))
 eval_data_used = eval_data.select(range(num_eval_samples))
 eval_data_unused = eval_data.select(range(num_eval_samples, len(eval_data)))
 
+# トークン長でデータセットをソート
+train_data_sorted = train_data_used.sort('length')
+
 
 # サンプルの長さに基づいてデータをソートし、バッチを形成するためのカスタムサンプラー
 from torch.utils.data import Sampler
@@ -417,25 +420,7 @@ class CustomTrainer(Trainer):
         
         return result
     
-    def get_train_dataloader(self):
-        if self.train_dataset is None:
-            raise ValueError("Trainer: training requires a train_dataset.")
-
-        lengths = self.train_dataset["length"]
-        sampler = GroupedLengthSampler(
-            lengths=lengths,
-            batch_size=self.args.per_device_train_batch_size,
-            shuffle=True
-        )
-
-        return DataLoader(
-            self.train_dataset,
-            batch_size=self.args.per_device_train_batch_size,
-            sampler=sampler,
-            collate_fn=self.data_collator,
-            num_workers=self.args.dataloader_num_workers,
-            pin_memory=self.args.dataloader_pin_memory,
-        )
+    
 
 # Hugging Faceの進捗バーを強制的に有効化
 logging.set_verbosity_info()
@@ -479,7 +464,7 @@ args = TrainingArguments(
 trainer = CustomTrainer(
     model=model,
     args=args,
-    train_dataset=train_data_used,
+    train_dataset=train_data_sorted,
     eval_dataset=eval_data_used,
     data_collator=data_collator,
 )
