@@ -373,10 +373,10 @@ class CustomTrainer(Trainer):
                 except Queue.Empty:
                     pass
 
-    def training_step(self, model, inputs):
+    def training_step(self, model, inputs, optimizer=None):
         try:
             # 通常のトレーニングステップを実行
-            loss = super().training_step(model, inputs)
+            loss = super().training_step(model, inputs, optimizer)
             # メトリクスのログ記録
             self.log_network_metrics()
             return loss
@@ -385,10 +385,16 @@ class CustomTrainer(Trainer):
             input_ids = inputs.get('input_ids', None)
             context_input_ids = inputs.get('context_input_ids', None)
             if input_ids is not None:
-                text_lengths = [len(ids) for ids in input_ids]
+                if isinstance(input_ids, torch.Tensor):
+                    text_lengths = [input_ids.size(1)]
+                else:
+                    text_lengths = [len(ids) for ids in input_ids]
                 print(f"Error occurred during training on batch with text lengths: {text_lengths}")
             if context_input_ids is not None:
-                context_lengths = [len(ids) for ids in context_input_ids]
+                if isinstance(context_input_ids, torch.Tensor):
+                    context_lengths = [context_input_ids.size(1)]
+                else:
+                    context_lengths = [len(ids) for ids in context_input_ids]
                 print(f"Error occurred during training on batch with context lengths: {context_lengths}")
             else:
                 print("Error occurred during training but could not retrieve input_ids or context_input_ids")
