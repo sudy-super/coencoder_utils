@@ -12,6 +12,13 @@ from coencoder_src.tokenization_co_encoder import CoEncoderDualTokenizer
 
 from accelerate import infer_auto_device_map, dispatch_model
 import os
+import psutil
+import subprocess
+import re
+import threading
+import time
+import psutil
+from datetime import datetime
 
 import torch.distributed as dist
 
@@ -293,22 +300,98 @@ for i in range(len(first_batch)):
 
 from torch.utils.data import DataLoader
 
+import torch.distributed as dist
+
+class NetworkMonitor:
+    def __init__(self, rank):
+        self.rank = rank
+        self.running = True
+        self.previous_bytes = self._get_network_stats()
+        
+    def _get_network_stats(self):
+        # Get NCCL statistics from debug output
+        nccl_stats = {}
+        try:
+            with open(f"/tmp/nccl_debug_rank_{self.rank}.log", "r") as f:
+                logs = f.readlines()
+                for line in logs:
+                    if "Send" in line:
+                        match = re.search(r"Size: (\d+)", line)
+                        if match:
+                            nccl_stats['send_bytes'] = nccl_stats.get('send_bytes', 0) + int(match.group(1))
+                    if "Recv" in line:
+                        match = re.search(r"Size: (\d+)", line)
+                        if match:
+                            nccl_stats['recv_bytes'] = nccl_stats.get('recv_bytes', 0) + int(match.group(1))
+        except FileNotFoundError:
+            pass
+
+        # Get general network interface statistics
+        net_io = psutil.net_io_counters()
+        return {
+            'bytes_sent': net_io.bytes_sent + nccl_stats.get('send_bytes', 0),
+            'bytes_recv': net_io.bytes_recv + nccl_stats.get('recv_bytes', 0)
+        }
+
+    def calculate_bandwidth(self, current_bytes, previous_bytes, interval):
+        sent_bandwidth = (current_bytes['bytes_sent'] - previous_bytes['bytes_sent']) / interval
+        recv_bandwidth = (current_bytes['bytes_recv'] - previous_bytes['bytes_recv']) / interval
+        return sent_bandwidth, recv_bandwidth
+
+    def monitor(self, interval=1.0):
+        while self.running:
+            current_bytes = self._get_network_stats()
+            sent_bandwidth, recv_bandwidth = self.calculate_bandwidth(
+                current_bytes, self.previous_bytes, interval
+            )
+            
+            # Only log from rank 0 to avoid duplicate logging
+            if dist.get_rank() == 0:
+                wandb.log({
+                    f'network/node_{self.rank}/send_bandwidth_mbps': sent_bandwidth / (1024 * 1024),
+                    f'network/node_{self.rank}/recv_bandwidth_mbps': recv_bandwidth / (1024 * 1024),
+                    f'network/node_{self.rank}/total_sent_gb': current_bytes['bytes_sent'] / (1024 * 1024 * 1024),
+                    f'network/node_{self.rank}/total_recv_gb': current_bytes['bytes_recv'] / (1024 * 1024 * 1024),
+                })
+            
+            self.previous_bytes = current_bytes
+            time.sleep(interval)
+
+    def stop(self):
+        self.running = False
+
 class CustomTrainer(Trainer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.network_monitor = NetworkMonitor(dist.get_rank())
+        self.monitor_thread = None
+
+    def train(self, *args, **kwargs):
+        # Start network monitoring in a separate thread
+        self.monitor_thread = threading.Thread(target=self.network_monitor.monitor)
+        self.monitor_thread.start()
+        
+        try:
+            result = super().train(*args, **kwargs)
+        finally:
+            # Ensure monitoring is stopped when training ends
+            self.network_monitor.stop()
+            if self.monitor_thread:
+                self.monitor_thread.join()
+        
+        return result
+
     def get_train_dataloader(self):
         if self.train_dataset is None:
             raise ValueError("Trainer: training requires a train_dataset.")
 
-        # サンプルの長さを取得
         lengths = self.train_dataset["length"]
-
-        # カスタムサンプラーを作成
         sampler = GroupedLengthSampler(
             lengths=lengths,
             batch_size=self.args.per_device_train_batch_size,
             shuffle=True
         )
 
-        # データローダーを作成
         return DataLoader(
             self.train_dataset,
             batch_size=self.args.per_device_train_batch_size,
@@ -323,7 +406,7 @@ args = TrainingArguments(
     num_train_epochs=1,
     per_device_train_batch_size=1,
     per_device_eval_batch_size=1,
-    gradient_accumulation_steps=2,
+    gradient_accumulation_steps=64,
     learning_rate=1e-3,
     adam_beta2=0.95,
     weight_decay=0.01,

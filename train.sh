@@ -12,5 +12,6 @@ export NCCL_P2P_LEVEL=SYS
 export NCCL_SHM_DISABLE=0
 export MASTER_ADDR=10.1.201.21
 export MASTER_PORT=29500
+export NCCL_DEBUG_FILE="/tmp/nccl_debug_rank_%r.log"
 
 deepspeed --hostfile=hostfile --num_nodes=3 --num_gpus=8 finetune_mn.py --deepspeed ds_config_mn.json
