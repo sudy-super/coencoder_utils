@@ -59,16 +59,22 @@ for param in model.language_model.parameters():
 
 global_rank = dist.get_rank()
 
-def get_device_map_for_rank(rank):
-    # 各ランクが担当するGPUの範囲を定義
+def get_node_rank(gpu_rank):
+    return gpu_rank // 8  # 各ノードに8 GPUがあるため
+
+def get_device_map_for_rank(gpu_rank):
+    # GPUのglobal rankからノード番号を取得
+    node_rank = get_node_rank(gpu_rank)
+    
+    # 各ノードが担当するGPUの範囲を定義
     gpu_ranges = {
-        0: (0, 7),    # rank 0: cuda:0-7
-        1: (8, 15),   # rank 1: cuda:8-15
-        2: (16, 23),  # rank 2: cuda:16-23
-        3: (24, 31)   # rank 3: cuda:24-31
+        0: (0, 7),    # node 0: cuda:0-7
+        1: (8, 15),   # node 1: cuda:8-15
+        2: (16, 23),  # node 2: cuda:16-23
+        3: (24, 31)   # node 3: cuda:24-31
     }
     
-    start_gpu, end_gpu = gpu_ranges[rank]
+    start_gpu, end_gpu = gpu_ranges[node_rank]
     device_map = {}
     
     # 基本的なdevice mapを定義
@@ -127,7 +133,7 @@ def get_device_map_for_rank(rank):
     
     return device_map
 
-# 現在のランクに対応するdevice_mapを取得
+# 現在のglobal rankに対応するdevice_mapを取得
 device_map = get_device_map_for_rank(global_rank)
 
 
