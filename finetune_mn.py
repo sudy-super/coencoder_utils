@@ -57,75 +57,78 @@ for param in model.context_tower.parameters():
 for param in model.language_model.parameters():
     param.requires_grad = False
 
+global_rank = dist.get_rank()
 
-device_map = {
-    'context_tower.tower.embed_tokens': 'cuda:0',
-    'context_tower.tower.layers.0': 'cuda:0',
-    'context_tower.tower.layers.1': 'cuda:0',
-    'context_tower.tower.layers.2': 'cuda:1',
-    'context_tower.tower.layers.3': 'cuda:1',
-    'context_tower.tower.layers.4': 'cuda:2',
-    'context_tower.tower.layers.5': 'cuda:2',
-    'context_tower.tower.layers.6': 'cuda:3',
-    'context_tower.tower.layers.7': 'cuda:3',
-    'context_tower.tower.layers.8': 'cuda:4',
-    'context_tower.tower.layers.9': 'cuda:4',
-    'context_tower.tower.layers.10': 'cuda:5',
-    'context_tower.tower.layers.11': 'cuda:5',
-    'context_tower.tower.layers.12': 'cuda:6',
-    'context_tower.tower.layers.13': 'cuda:6',
-    'context_tower.tower.layers.14': 'cuda:7',
-    'context_tower.tower.layers.15': 'cuda:7',
-    'context_tower.tower.layers.16': 'cuda:8',
-    'context_tower.tower.layers.17': 'cuda:8',
-    'context_tower.tower.layers.18': 'cuda:9',
-    'context_tower.tower.layers.19': 'cuda:9',
-    'context_tower.tower.layers.20': 'cuda:10',
-    'context_tower.tower.layers.21': 'cuda:10',
-    'context_tower.tower.layers.22': 'cuda:11',
-    'context_tower.tower.layers.23': 'cuda:11',
-
-    'connector.dynamic_pooling': 'cuda:12',
-    'connector.linear_1': 'cuda:13',
-    'connector.act': 'cuda:14',
-    'connector.linear_2': 'cuda:14',
+def get_device_map_for_rank(rank):
+    # 各ランクが担当するGPUの範囲を定義
+    gpu_ranges = {
+        0: (0, 7),    # rank 0: cuda:0-7
+        1: (8, 15),   # rank 1: cuda:8-15
+        2: (16, 23),  # rank 2: cuda:16-23
+        3: (24, 31)   # rank 3: cuda:24-31
+    }
     
-    'language_model.model.embed_tokens': 'cuda:14',
-    'language_model.model.layers.0': 'cuda:15',
-    'language_model.model.layers.1': 'cuda:15',
-    'language_model.model.layers.2': 'cuda:16',
-    'language_model.model.layers.3': 'cuda:16',
-    'language_model.model.layers.4': 'cuda:17',
-    'language_model.model.layers.5': 'cuda:17',
-    'language_model.model.layers.6': 'cuda:18',
-    'language_model.model.layers.7': 'cuda:18',
-    'language_model.model.layers.8': 'cuda:19',
-    'language_model.model.layers.9': 'cuda:19',
-    'language_model.model.layers.10': 'cuda:20',
-    'language_model.model.layers.11': 'cuda:20',
-    'language_model.model.layers.12': 'cuda:21',
-    'language_model.model.layers.13': 'cuda:21',
-    'language_model.model.layers.14': 'cuda:22',
-    'language_model.model.layers.15': 'cuda:22',
-    'language_model.model.layers.16': 'cuda:23',
-    'language_model.model.layers.17': 'cuda:23',
-    'language_model.model.layers.18': 'cuda:24',
-    'language_model.model.layers.19': 'cuda:24',
-    'language_model.model.layers.20': 'cuda:25',
-    'language_model.model.layers.21': 'cuda:25',
-    'language_model.model.layers.22': 'cuda:26',
-    'language_model.model.layers.23': 'cuda:26',
-    'language_model.model.layers.24': 'cuda:27',
-    'language_model.model.layers.25': 'cuda:27',
-    'language_model.model.layers.26': 'cuda:28',
-    'language_model.model.layers.27': 'cuda:28',
-    'language_model.model.layers.28': 'cuda:29',
-    'language_model.model.layers.29': 'cuda:29',
-    'language_model.model.layers.30': 'cuda:30',
-    'language_model.model.layers.31': 'cuda:30',
-    'language_model.model.norm': 'cuda:31',
-    'language_model.lm_head': 'cuda:31',
-}
+    start_gpu, end_gpu = gpu_ranges[rank]
+    device_map = {}
+    
+    # 基本的なdevice mapを定義
+    base_map = {
+        'context_tower.tower.embed_tokens': 'cuda:0',
+        'connector.dynamic_pooling': 'cuda:12',
+        'connector.linear_1': 'cuda:13',
+        'connector.act': 'cuda:14',
+        'connector.linear_2': 'cuda:14',
+        'language_model.model.embed_tokens': 'cuda:14',
+        'language_model.model.norm': 'cuda:31',
+        'language_model.lm_head': 'cuda:31'
+    }
+    
+    # context_tower layers
+    for i in range(24):
+        gpu_idx = i // 2
+        if start_gpu <= gpu_idx <= end_gpu:
+            if gpu_idx >= 8:
+                gpu_idx -= 8
+            if gpu_idx >= 8:
+                gpu_idx -= 8
+            if gpu_idx >= 8:
+                gpu_idx -= 8
+            if gpu_idx >= 8:
+                gpu_idx -= 8
+            device_map[f'context_tower.tower.layers.{i}'] = f'cuda:{gpu_idx}'
+    
+    # language_model layers
+    for i in range(32):
+        gpu_idx = i // 2 + 15  # 15から始まるため
+        if start_gpu <= gpu_idx <= end_gpu:
+            if gpu_idx >= 8:
+                gpu_idx -= 8
+            if gpu_idx >= 8:
+                gpu_idx -= 8
+            if gpu_idx >= 8:
+                gpu_idx -= 8
+            if gpu_idx >= 8:
+                gpu_idx -= 8
+            device_map[f'language_model.model.layers.{i}'] = f'cuda:{gpu_idx}'
+    
+    # 基本コンポーネントの割り当て
+    for key, device in base_map.items():
+        gpu_idx = int(device.split(':')[1])
+        if start_gpu <= gpu_idx <= end_gpu:
+            if gpu_idx >= 8:
+                gpu_idx -= 8
+            if gpu_idx >= 8:
+                gpu_idx -= 8
+            if gpu_idx >= 8:
+                gpu_idx -= 8
+            if gpu_idx >= 8:
+                gpu_idx -= 8
+            device_map[key] = f'cuda:{gpu_idx}'
+    
+    return device_map
+
+# 現在のランクに対応するdevice_mapを取得
+device_map = get_device_map_for_rank(global_rank)
 
 
 # device_mapに基づいてモデルの各部分を対応するGPUに移動
