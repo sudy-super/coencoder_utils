@@ -58,6 +58,83 @@ for param in model.language_model.parameters():
     param.requires_grad = False
 
 
+device_map = {
+    'context_tower.tower.embed_tokens': 'cuda:0',
+    'context_tower.tower.layers.0': 'cuda:0',
+    'context_tower.tower.layers.1': 'cuda:0',
+    'context_tower.tower.layers.2': 'cuda:1',
+    'context_tower.tower.layers.3': 'cuda:1',
+    'context_tower.tower.layers.4': 'cuda:2',
+    'context_tower.tower.layers.5': 'cuda:2',
+    'context_tower.tower.layers.6': 'cuda:3',
+    'context_tower.tower.layers.7': 'cuda:3',
+    'context_tower.tower.layers.8': 'cuda:4',
+    'context_tower.tower.layers.9': 'cuda:4',
+    'context_tower.tower.layers.10': 'cuda:5',
+    'context_tower.tower.layers.11': 'cuda:5',
+    'context_tower.tower.layers.12': 'cuda:6',
+    'context_tower.tower.layers.13': 'cuda:6',
+    'context_tower.tower.layers.14': 'cuda:7',
+    'context_tower.tower.layers.15': 'cuda:7',
+    'context_tower.tower.layers.16': 'cuda:8',
+    'context_tower.tower.layers.17': 'cuda:8',
+    'context_tower.tower.layers.18': 'cuda:9',
+    'context_tower.tower.layers.19': 'cuda:9',
+    'context_tower.tower.layers.20': 'cuda:10',
+    'context_tower.tower.layers.21': 'cuda:10',
+    'context_tower.tower.layers.22': 'cuda:11',
+    'context_tower.tower.layers.23': 'cuda:11',
+
+    'connector.dynamic_pooling': 'cuda:12',
+    'connector.linear_1': 'cuda:13',
+    'connector.act': 'cuda:14',
+    'connector.linear_2': 'cuda:14',
+    
+    'language_model.model.embed_tokens': 'cuda:14',
+    'language_model.model.layers.0': 'cuda:15',
+    'language_model.model.layers.1': 'cuda:15',
+    'language_model.model.layers.2': 'cuda:16',
+    'language_model.model.layers.3': 'cuda:16',
+    'language_model.model.layers.4': 'cuda:17',
+    'language_model.model.layers.5': 'cuda:17',
+    'language_model.model.layers.6': 'cuda:18',
+    'language_model.model.layers.7': 'cuda:18',
+    'language_model.model.layers.8': 'cuda:19',
+    'language_model.model.layers.9': 'cuda:19',
+    'language_model.model.layers.10': 'cuda:20',
+    'language_model.model.layers.11': 'cuda:20',
+    'language_model.model.layers.12': 'cuda:21',
+    'language_model.model.layers.13': 'cuda:21',
+    'language_model.model.layers.14': 'cuda:22',
+    'language_model.model.layers.15': 'cuda:22',
+    'language_model.model.layers.16': 'cuda:23',
+    'language_model.model.layers.17': 'cuda:23',
+    'language_model.model.layers.18': 'cuda:24',
+    'language_model.model.layers.19': 'cuda:24',
+    'language_model.model.layers.20': 'cuda:25',
+    'language_model.model.layers.21': 'cuda:25',
+    'language_model.model.layers.22': 'cuda:26',
+    'language_model.model.layers.23': 'cuda:26',
+    'language_model.model.layers.24': 'cuda:27',
+    'language_model.model.layers.25': 'cuda:27',
+    'language_model.model.layers.26': 'cuda:28',
+    'language_model.model.layers.27': 'cuda:28',
+    'language_model.model.layers.28': 'cuda:29',
+    'language_model.model.layers.29': 'cuda:29',
+    'language_model.model.layers.30': 'cuda:30',
+    'language_model.model.layers.31': 'cuda:30',
+    'language_model.model.norm': 'cuda:31',
+    'language_model.lm_head': 'cuda:31',
+}
+
+
+# device_mapに基づいてモデルの各部分を対応するGPUに移動
+for name, module in model.named_modules():
+    if name in device_map:
+        device = device_map[name]
+        module.to(device)
+
+
 # データセットの読み込み
 dataset = load_dataset("sudy-super/coencoder_data")
 
