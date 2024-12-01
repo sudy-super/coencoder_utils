@@ -67,7 +67,7 @@ def get_device_map_for_rank(gpu_rank):
     
     # 基本的なdevice mapを定義
     base_map = {
-        'context_tower.tower.embed_tokens': 'cuda:0',
+        'context_tower.tower.model.embed_tokens': 'cuda:0',
         'connector.dynamic_pooling': 'cuda:12',
         'connector.linear_1': 'cuda:13',
         'connector.act': 'cuda:14',
@@ -89,7 +89,7 @@ def get_device_map_for_rank(gpu_rank):
                 gpu_idx -= 8
             if gpu_idx >= 8:
                 gpu_idx -= 8
-            device_map[f'context_tower.tower.layers.{i}'] = f'cuda:{gpu_idx}'
+            device_map[f'context_tower.tower.model.layers.{i}'] = f'cuda:{gpu_idx}'
     
     # language_model layers
     for i in range(32):
