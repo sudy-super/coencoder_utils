@@ -100,7 +100,7 @@ Today Date: 9 Nov 2024
 # `tokenize`関数をバッチ処理に対応
 def tokenize(batch):
     # 最大トークン数の設定
-    max_context_tokens = 65536
+    max_context_tokens = 131072
 
     # 各サンプルに対してcontextのトークン数を確認し、必要に応じてカット
     truncated_contexts = []
@@ -271,7 +271,7 @@ class GroupedLengthSampler(Sampler):
         self.indices_lengths = list(enumerate(self.lengths))
 
         # 長さに基づいてソート
-        self.indices_lengths.sort(key=lambda x: x[1])
+        self.indices_lengths.sort(key=lambda x: x[1], reverse=True)
 
         # バッチを形成
         self.batches = [self.indices_lengths[i:i + self.batch_size] for i in range(0, len(self.indices_lengths), self.batch_size)]
@@ -430,7 +430,7 @@ class CustomTrainer(Trainer):
         sampler = GroupedLengthSampler(
             lengths=lengths,
             batch_size=self.args.per_device_train_batch_size,
-            shuffle=False
+            shuffle=True
         )
 
         # データローダーを作成
