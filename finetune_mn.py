@@ -450,9 +450,9 @@ logging.enable_progress_bar()
 # トレーニング引数の設定
 args = TrainingArguments(
     num_train_epochs=1,
-    per_device_train_batch_size=1,
+    per_device_train_batch_size=2,
     per_device_eval_batch_size=1,
-    gradient_accumulation_steps=64,
+    gradient_accumulation_steps=32,
     learning_rate=1e-3,
     adam_beta2=0.95,
     weight_decay=0.0,
