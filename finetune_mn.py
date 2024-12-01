@@ -22,6 +22,7 @@ from datetime import datetime
 
 import torch.distributed as dist
 
+
 # DeepSpeedがtorch.distributedの初期化を行うため、その後でランクを取得します
 dist.init_process_group(backend='nccl')  # 必要に応じてバックエンドを指定
 
@@ -473,7 +474,7 @@ args = TrainingArguments(
     seed=42,
     bf16=True,  # bf16を有効化
     bf16_full_eval=True,
-    deepspeed="ds_config_mn.json",  # DeepSpeed設定ファイルの指定
+    # deepspeed="ds_config_mn.json",  # DeepSpeed設定ファイルの指定
     gradient_checkpointing=True,
     optim="adamw_torch_fused",
     dataloader_pin_memory=True,
