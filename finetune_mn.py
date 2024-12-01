@@ -430,7 +430,7 @@ class CustomTrainer(Trainer):
         sampler = GroupedLengthSampler(
             lengths=lengths,
             batch_size=self.args.per_device_train_batch_size,
-            shuffle=False
+            shuffle=True
         )
 
         # データローダーを作成
