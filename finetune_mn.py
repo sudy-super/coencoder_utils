@@ -43,19 +43,7 @@ model = CoEncoderForConditionalGeneration.from_pretrained(
     attn_implementation="flash_attention_2"
 )
 
-model.model_parallel = True
-
 tokenizer.text_tokenizer.pad_token = tokenizer.text_tokenizer.eos_token
-
-model.gradient_checkpointing_enable()
-
-
-# context_towerとlanguage_modelの重みを凍結
-for param in model.context_tower.parameters():
-    param.requires_grad = False
-
-for param in model.language_model.parameters():
-    param.requires_grad = False
 
 global_rank = dist.get_rank()
 
@@ -142,6 +130,21 @@ for name, module in model.named_modules():
     if name in device_map:
         device = device_map[name]
         module.to(device)
+
+model = dispatch_model(model, device_map=device_map)
+
+# モデルの並列処理フラグを設定
+model.is_parallelized = True
+model.model_parallel = True
+
+model.gradient_checkpointing_enable()
+
+# context_towerとlanguage_modelの重みを凍結
+for param in model.context_tower.parameters():
+    param.requires_grad = False
+
+for param in model.language_model.parameters():
+    param.requires_grad = False
 
 
 # データセットの読み込み
