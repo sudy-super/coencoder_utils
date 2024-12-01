@@ -5,25 +5,6 @@
     "bf16": {
         "enabled": true
     },
-    "zero_optimization": {
-        "stage": 3,
-        "offload_param": {
-            "device": "cpu",
-            "pin_memory": true
-        },
-        "offload_optimizer": {
-            "device": "cpu",
-            "pin_memory": true
-        },
-        "overlap_comm": true,
-        "contiguous_gradients": true,
-        "reduce_bucket_size": "auto",
-        "stage3_prefetch_bucket_size": "auto",
-        "stage3_param_persistence_threshold": "auto",
-        "allgather_partitions": true,
-        "allgather_bucket_size": 200000000.0,
-        "reduce_scatter": true
-    },
     "optimizer": {
         "type": "AdamW",
         "params": {
@@ -45,12 +26,14 @@
     },
     "tensor_parallel": {
         "enabled": true,
-        "tp_size": 8
+        "tp_size": 8,
+        "size": 8
     },
     "pipeline": {
         "pipeline_model_parallel_size": 4,
         "activation_checkpoint_interval": 1,
-        "prescale_gradients": true
+        "prescale_gradients": true,
+        "stages": 4
     },
     "data_parallel_size": 1,
     "activation_checkpointing": {

@@ -14,4 +14,4 @@ export MASTER_ADDR=10.1.201.17
 export MASTER_PORT=29500
 export NCCL_DEBUG_FILE="/tmp/nccl_debug_rank_%r.log"
 
-torchrun --nnodes=4 --nproc_per_node=8 --rdzv_id=123 --rdzv_backend=c10d --rdzv_endpoint=10.1.201.17:29500 finetune_mn.py
+deepspeed --hostfile=hostfile --num_nodes=4 --num_gpus=8 finetune_mn.py --deepspeed ds_config_mn.json
