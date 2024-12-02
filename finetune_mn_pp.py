@@ -440,8 +440,13 @@ training_args = TrainingArguments(
     per_device_eval_batch_size=1,
     gradient_accumulation_steps=2,
     learning_rate=1e-3,
+    adam_beta2=0.95,
+    weight_decay=0.0,
+    lr_scheduler_type="cosine",
+    warmup_ratio=0.03,
     disable_tqdm=False,
     logging_steps=1,
+    log_level="info",
     logging_strategy="steps",
     eval_strategy="steps",
     save_strategy="steps",
@@ -453,8 +458,13 @@ training_args = TrainingArguments(
     push_to_hub=False,
     seed=42,
     bf16=True,
+    bf16_full_eval=True,
     deepspeed="ds_config_mn_pp.json",
     local_rank=local_rank,
+    gradient_checkpointing=True,
+    optim="adamw_torch_fused",
+    dataloader_pin_memory=True,
+    dataloader_num_workers=4,
 )
 
 optimizer = torch.optim.AdamW(param_groups, lr=training_args.learning_rate)
