@@ -192,8 +192,6 @@ class NetworkMonitor:
 
 class CoEncoderPipeline(PipelineModule):
     def __init__(self, base_model, num_stages=32):
-        self.base_model = base_model
-        
         stages = []
         
         # Stage 0-11: Context Tower
