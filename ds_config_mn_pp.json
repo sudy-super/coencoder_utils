@@ -17,16 +17,6 @@
             "weight_decay": 0.0
         }
     },
-    "scheduler": {
-        "type": "WarmupCosineLR",
-        "params": {
-            "total_num_steps": "auto",
-            "warmup_num_steps": "auto",
-            "warmup_type": "linear",
-            "warmup_min_ratio": 0.03,
-            "cos_min_ratio": 0.1
-        }
-    },
     "pipeline": {
         "stages": 32,
         "pipe_chunk_size": 1,
