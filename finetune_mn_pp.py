@@ -403,9 +403,38 @@ eval_data_unused = eval_data.select(range(num_eval_samples, len(eval_data)))
 train_data_sorted = train_data_used.sort('length')
 
 # DeepSpeed設定
-import json
-with open("ds_config_mn_pp.json", "r", encoding="utf-8") as f:
-    ds_config = json.load(f)
+ds_config = {
+    "train_batch_size": 64,
+    "gradient_accumulation_steps": 64,
+    "gradient_clipping": 1.0,
+    "bf16": {
+        "enabled": True
+    },
+    "zero_optimization": {
+        "stage": 0
+    },
+    "optimizer": {
+        "type": "AdamW",
+        "params": {
+            "lr": 1e-3,
+            "betas": [0.9, 0.95],
+            "eps": 1e-8,
+            "weight_decay": 0.0
+        }
+    },
+    "pipeline": {
+        "stages": 32,
+        "pipe_chunk_size": 1,
+        "activation_checkpoint_interval": 0,
+        "pipe_schedule": "interleaved"
+    },
+    "data_parallel_size": 1,
+    "activation_checkpointing": {
+        "partition_activations": True,
+        "contiguous_memory_optimization": True
+    }
+}
+
 
 # パイプラインモデルの作成と初期化
 model = CoEncoderPipeline(base_model, num_stages=32)
