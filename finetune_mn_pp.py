@@ -198,10 +198,10 @@ class CoEncoderPipeline(PipelineModule):
         for i in range(12):
             start_idx = i * 2
             stages.append([
-                base_model.context_tower.tower.layers[start_idx],
-                base_model.context_tower.tower.layers[start_idx + 1]
+                base_model.context_tower.tower.model.layers[start_idx],
+                base_model.context_tower.tower.model.layers[start_idx + 1]
             ])
-            
+        
         # Stage 12-14: Connector
         stages.append([base_model.connector.dynamic_pooling])
         stages.append([base_model.connector.linear_1])
@@ -218,13 +218,14 @@ class CoEncoderPipeline(PipelineModule):
                 base_model.language_model.model.layers[start_idx],
                 base_model.language_model.model.layers[start_idx + 1]
             ])
-            
+        
         # Stage 31: Final Layer Norm and LM Head
         stages.append([
             base_model.language_model.model.norm,
             base_model.language_model.lm_head
         ])
         
+        # 親クラスの初期化
         super().__init__(
             layers=stages,
             loss_fn=base_model.forward,
