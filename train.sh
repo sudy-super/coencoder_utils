@@ -14,4 +14,4 @@ export MASTER_ADDR=10.1.201.17
 export MASTER_PORT=29500
 export NCCL_DEBUG_FILE="/tmp/nccl_debug_rank_%r.log"
 
-deepspeed --hostfile=hostfile --num_nodes=4 --num_gpus=8 finetune_mn.py
+deepspeed finetune_mn_pp.py --hostfile=hostfile --num_nodes=4 --num_gpus=8 --deepspeed ds_config_mn_pp.json

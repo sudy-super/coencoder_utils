@@ -22,7 +22,6 @@ from datetime import datetime
 
 import torch.distributed as dist
 
-
 # DeepSpeedがtorch.distributedの初期化を行うため、その後でランクを取得します
 dist.init_process_group(backend='nccl')  # 必要に応じてバックエンドを指定
 
@@ -43,101 +42,12 @@ model = CoEncoderForConditionalGeneration.from_pretrained(
     attn_implementation="flash_attention_2"
 )
 
-tokenizer.text_tokenizer.pad_token = tokenizer.text_tokenizer.eos_token
-
-global_rank = dist.get_rank()
-
-def get_node_rank(gpu_rank):
-    return gpu_rank // 8  # 各ノードに8 GPUがあるため
-
-def get_device_map_for_rank(gpu_rank):
-    # GPUのglobal rankからノード番号を取得
-    node_rank = get_node_rank(gpu_rank)
-    
-    # 各ノードが担当するGPUの範囲を定義
-    gpu_ranges = {
-        0: (0, 7),    # node 0: cuda:0-7
-        1: (8, 15),   # node 1: cuda:8-15
-        2: (16, 23),  # node 2: cuda:16-23
-        3: (24, 31)   # node 3: cuda:24-31
-    }
-    
-    start_gpu, end_gpu = gpu_ranges[node_rank]
-    device_map = {}
-    
-    # 基本的なdevice mapを定義
-    base_map = {
-        'context_tower.tower.model.embed_tokens': 'cuda:0',
-        'connector.dynamic_pooling': 'cuda:12',
-        'connector.linear_1': 'cuda:13',
-        'connector.act': 'cuda:14',
-        'connector.linear_2': 'cuda:14',
-        'language_model.model.embed_tokens': 'cuda:14',
-        'language_model.model.norm': 'cuda:31',
-        'language_model.lm_head': 'cuda:31'
-    }
-    
-    # context_tower layers
-    for i in range(24):
-        gpu_idx = i // 2
-        if start_gpu <= gpu_idx <= end_gpu:
-            if gpu_idx >= 8:
-                gpu_idx -= 8
-            if gpu_idx >= 8:
-                gpu_idx -= 8
-            if gpu_idx >= 8:
-                gpu_idx -= 8
-            if gpu_idx >= 8:
-                gpu_idx -= 8
-            device_map[f'context_tower.tower.model.layers.{i}'] = f'cuda:{gpu_idx}'
-    
-    # language_model layers
-    for i in range(32):
-        gpu_idx = i // 2 + 15  # 15から始まるため
-        if start_gpu <= gpu_idx <= end_gpu:
-            if gpu_idx >= 8:
-                gpu_idx -= 8
-            if gpu_idx >= 8:
-                gpu_idx -= 8
-            if gpu_idx >= 8:
-                gpu_idx -= 8
-            if gpu_idx >= 8:
-                gpu_idx -= 8
-            device_map[f'language_model.model.layers.{i}'] = f'cuda:{gpu_idx}'
-    
-    # 基本コンポーネントの割り当て
-    for key, device in base_map.items():
-        gpu_idx = int(device.split(':')[1])
-        if start_gpu <= gpu_idx <= end_gpu:
-            if gpu_idx >= 8:
-                gpu_idx -= 8
-            if gpu_idx >= 8:
-                gpu_idx -= 8
-            if gpu_idx >= 8:
-                gpu_idx -= 8
-            if gpu_idx >= 8:
-                gpu_idx -= 8
-            device_map[key] = f'cuda:{gpu_idx}'
-    
-    return device_map
-
-# 現在のglobal rankに対応するdevice_mapを取得
-device_map = get_device_map_for_rank(global_rank)
-
-
-# device_mapに基づいてモデルの各部分を対応するGPUに移動
-for name, module in model.named_modules():
-    if name in device_map:
-        device = device_map[name]
-        module.to(device)
-
-model = dispatch_model(model, device_map=device_map)
-
-# モデルの並列処理フラグを設定
-model.is_parallelized = True
 model.model_parallel = True
 
+tokenizer.text_tokenizer.pad_token = tokenizer.text_tokenizer.eos_token
+
 model.gradient_checkpointing_enable()
+
 
 # context_towerとlanguage_modelの重みを凍結
 for param in model.context_tower.parameters():
@@ -563,7 +473,7 @@ args = TrainingArguments(
     seed=42,
     bf16=True,  # bf16を有効化
     bf16_full_eval=True,
-    # deepspeed="ds_config_mn.json",  # DeepSpeed設定ファイルの指定
+    deepspeed="ds_config_mn.json",  # DeepSpeed設定ファイルの指定
     gradient_checkpointing=True,
     optim="adamw_torch_fused",
     dataloader_pin_memory=True,
