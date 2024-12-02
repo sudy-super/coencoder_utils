@@ -415,12 +415,23 @@ for name, param in model.named_parameters():
     if 'context_tower' in name or 'language_model' in name:
         param.requires_grad = False
 
-# DeepSpeedエンジンの初期化
-model_engine, optimizer, _, _ = deepspeed.initialize(
-    model=model,
-    model_parameters=model.parameters(),
-    config=ds_config
-)
+
+# 学習するパラメータ（connector部分）
+trainable_params = []
+# 学習しないパラメータ（他の部分）
+non_trainable_params = []
+
+for name, param in model.named_parameters():
+    if 'connector' in name:
+        trainable_params.append(param)
+    else:
+        non_trainable_params.append(param)
+
+# パラメータグループを定義
+param_groups = [
+    {'params': trainable_params},  # 学習するパラメータ
+    {'params': non_trainable_params, 'lr': 0.0}  # 学習しないパラメータ
+]
 
 # トレーニング引数の設定
 training_args = TrainingArguments(
@@ -444,6 +455,15 @@ training_args = TrainingArguments(
     bf16=True,
     deepspeed="ds_config_mn_pp.json",
     local_rank=local_rank,
+)
+
+optimizer = torch.optim.AdamW(param_groups, lr=training_args.learning_rate)
+# DeepSpeedエンジンの初期化
+model_engine, optimizer, _, _ = deepspeed.initialize(
+    model=model,
+    optimizer=optimizer,
+    # model_parameters=model.parameters(),
+    config=ds_config
 )
 
 # トレーナーの初期化
