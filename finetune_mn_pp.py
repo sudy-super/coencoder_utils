@@ -234,6 +234,14 @@ class CoEncoderPipeline(PipelineModule):
             activation_checkpoint_interval=0
         )
 
+        self.base_model = base_model
+
+        def gradient_checkpointing_enable(self):
+            # モジュール内の全てのレイヤーで勾配チェックポイントを有効にする
+            for layer in self.modules():
+                if hasattr(layer, 'gradient_checkpointing_enable'):
+                    layer.gradient_checkpointing_enable()
+
 class DeepSpeedPipelineTrainer(Trainer):
     def __init__(self, model_engine, *args, **kwargs):
         super().__init__(*args, **kwargs)
