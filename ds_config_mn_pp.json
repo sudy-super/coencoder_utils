@@ -1,0 +1,41 @@
+{
+    "train_batch_size": "auto",
+    "gradient_accumulation_steps": "auto",
+    "gradient_clipping": 1.0,
+    "bf16": {
+        "enabled": true
+    },
+    "zero_optimization": {
+        "stage": 0
+    },
+    "optimizer": {
+        "type": "AdamW",
+        "params": {
+            "lr": 1e-3,
+            "betas": [0.9, 0.95],
+            "eps": 1e-8,
+            "weight_decay": 0.0
+        }
+    },
+    "scheduler": {
+        "type": "WarmupCosineLR",
+        "params": {
+            "total_num_steps": "auto",
+            "warmup_num_steps": "auto",
+            "warmup_type": "linear",
+            "warmup_min_ratio": 0.03,
+            "cos_min_ratio": 0.1
+        }
+    },
+    "pipeline": {
+        "stages": 32,
+        "pipe_chunk_size": 1,
+        "activation_checkpoint_interval": 0,
+        "pipe_schedule": "interleaved"
+    },
+    "data_parallel_size": 1,
+    "activation_checkpointing": {
+        "partition_activations": true,
+        "contiguous_memory_optimization": true
+    }
+}
