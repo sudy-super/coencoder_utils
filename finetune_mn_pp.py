@@ -418,7 +418,7 @@ for name, param in model.named_parameters():
 # DeepSpeedエンジンの初期化
 model_engine, optimizer, _, _ = deepspeed.initialize(
     model=model,
-    model_parameters=[p for p in model.parameters() if p.requires_grad],
+    model_parameters=model.parameters(),
     config=ds_config
 )
 
