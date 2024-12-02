@@ -450,7 +450,7 @@ model = CoEncoderPipeline(base_model, num_stages=32)
 # パラメータの凍結
 for name, param in model.named_parameters():
     if 'context_tower' in name or 'language_model' in name:
-        param.requires_grad = False
+        param.requires_grad = True
 
 
 # 学習するパラメータ（connector部分）
