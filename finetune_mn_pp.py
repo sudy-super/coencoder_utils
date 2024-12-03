@@ -67,6 +67,9 @@ def tokenize(batch):
         if len(context_tokens) > max_context_tokens:
             context = tokenizer.context_tokenizer.convert_tokens_to_string(context_tokens[:max_context_tokens])
         truncated_contexts.append(context)
+    
+    text_tokenized = tokenizer.text_tokenizer(batch['text'], add_special_tokens=False)
+    text_lengths = [len(ids) for ids in text_tokenized['input_ids']]
 
     tokenized_outputs = tokenizer(
         context=truncated_contexts,
@@ -77,6 +80,7 @@ def tokenize(batch):
     )
 
     tokenized_outputs['length'] = [len(ids) for ids in tokenized_outputs['input_ids']]
+    tokenized_outputs['text_length'] = text_lengths
     return tokenized_outputs
 
 def data_collator(features):
@@ -351,10 +355,6 @@ train_data = dataset["train"]
 val_data = dataset["validation"]
 test_data = dataset["test"]
 
-print(f"Number of train samples: {len(train_data)}")
-print(f"Number of validation samples: {len(val_data)}")
-print(f"Number of test samples: {len(test_data)}")
-
 # データの前処理
 def process_dataset(dataset, is_train=True):
     # 入力生成
@@ -382,6 +382,15 @@ def process_dataset(dataset, is_train=True):
 train_data = process_dataset(train_data, is_train=True)
 val_data = process_dataset(val_data, is_train=False)
 test_data = process_dataset(test_data, is_train=False)
+
+train_data = train_data.filter(lambda x: x['text_length'] <= 4096, num_proc=8)
+val_data = val_data.filter(lambda x: x['text_length'] <= 4096, num_proc=8)
+test_data = test_data.filter(lambda x: x['text_length'] <= 4096, num_proc=8)
+
+
+print(f"Number of train samples: {len(train_data)}")
+print(f"Number of validation samples: {len(val_data)}")
+print(f"Number of test samples: {len(test_data)}")
 
 # 評価データの一部をトレーニングデータに移動
 def move_random_samples(eval_dataset, train_dataset, num_samples=4500):

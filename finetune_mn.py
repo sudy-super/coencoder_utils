@@ -65,11 +65,6 @@ train_data = dataset["train"]
 val_data = dataset["validation"]
 test_data = dataset["test"]
 
-# データセットの件数をカウントして表示
-print(f"Number of train samples: {len(train_data)}")
-print(f"Number of validation samples: {len(val_data)}")
-print(f"Number of test samples: {len(test_data)}")
-
 
 # `generate_inputs`関数をバッチ処理に対応
 def generate_inputs(batch):
@@ -111,6 +106,9 @@ def tokenize(batch):
             # トークン数が65536を超える場合、カット
             context = tokenizer.context_tokenizer.convert_tokens_to_string(context_tokens[:max_context_tokens])
         truncated_contexts.append(context)
+    
+    text_tokenized = tokenizer.text_tokenizer(batch['text'], add_special_tokens=False)
+    text_lengths = [len(ids) for ids in text_tokenized['input_ids']]
 
     # contextをカットしたリストを用いて最終的にトークン化
     tokenized_outputs = tokenizer(
@@ -122,6 +120,7 @@ def tokenize(batch):
     )
 
     tokenized_outputs['length'] = [len(ids) for ids in tokenized_outputs['input_ids']]
+    tokenized_outputs['text_length'] = text_lengths
 
     return tokenized_outputs
 
@@ -221,6 +220,15 @@ test_data = test_data.map(
     desc="Tokenizing test data",
     load_from_cache_file=True
 )
+
+train_data = train_data.filter(lambda x: x['text_length'] <= 4096, num_proc=8)
+val_data = val_data.filter(lambda x: x['text_length'] <= 4096, num_proc=8)
+test_data = test_data.filter(lambda x: x['text_length'] <= 4096, num_proc=8)
+
+# データセットの件数をカウントして表示
+print(f"Number of train samples: {len(train_data)}")
+print(f"Number of validation samples: {len(val_data)}")
+print(f"Number of test samples: {len(test_data)}")
 
 from datasets import concatenate_datasets, Dataset
 
