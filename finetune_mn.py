@@ -263,7 +263,7 @@ num_eval_samples = int(0.6 * len(eval_data))
 eval_data_used = eval_data.select(range(num_eval_samples))
 eval_data_unused = eval_data.select(range(num_eval_samples, len(eval_data)))
 
-train_data_sorted = train_data_used.sort('length')
+# train_data_sorted = train_data_used.sort('length')
 
 
 # サンプルの長さに基づいてデータをソートし、バッチを形成するためのカスタムサンプラー
@@ -427,7 +427,7 @@ class CustomTrainer(Trainer):
                 self.monitor_thread.join(timeout=5)
         
         return result
-    
+    """
     def get_train_dataloader(self):
         if self.train_dataset is None:
             raise ValueError("Trainer: training requires a train_dataset.")
@@ -451,6 +451,7 @@ class CustomTrainer(Trainer):
             num_workers=self.args.dataloader_num_workers,
             pin_memory=self.args.dataloader_pin_memory,
         )
+    """
 
 # Hugging Faceの進捗バーを強制的に有効化
 logging.set_verbosity_info()
@@ -473,8 +474,8 @@ args = TrainingArguments(
     logging_strategy="steps",
     eval_strategy="steps",
     save_strategy="steps",
-    eval_steps=37,
-    save_steps=185,
+    eval_steps=65,
+    save_steps=303,
     output_dir="output",
     report_to="wandb",
     save_total_limit=3,
@@ -495,7 +496,7 @@ args = TrainingArguments(
 trainer = CustomTrainer(
     model=model,
     args=args,
-    train_dataset=train_data_sorted,
+    train_dataset=train_data_used,
     eval_dataset=eval_data_used,
     data_collator=data_collator,
 )
