@@ -6,7 +6,7 @@
         "enabled": true
     },
     "zero_optimization": {
-        "stage": 3,
+        "stage": 2,
         "offload_param": {
             "device": "cpu",
             "pin_memory": true
@@ -21,7 +21,7 @@
         "stage3_prefetch_bucket_size": "auto",
         "stage3_param_persistence_threshold": "auto",
         "allgather_partitions": true,
-        "allgather_bucket_size": 200000000.0,
+        "allgather_bucket_size": 5e8,
         "reduce_scatter": true
     },
     "optimizer": {
