@@ -28,7 +28,7 @@ dist.init_process_group(backend='nccl')  # 必要に応じてバックエンド�
 
 # グローバルランク0のプロセスのみでWandBを初期化
 if dist.get_rank() == 0:
-    wandb.init(project="coencoder_finetune_mn", name="1e-3_coencoder_connector", entity="sudy_super")
+    wandb.init(project="coencoder_finetune_mn", name="1e-3_coencoder_connector_llm", entity="sudy_super")
 
 torch.manual_seed(42)
 
@@ -549,8 +549,8 @@ args = TrainingArguments(
     logging_strategy="steps",
     eval_strategy="steps",
     save_strategy="steps",
-    eval_steps=73,
-    save_steps=316,
+    eval_steps=78,
+    save_steps=419,
     output_dir="output",
     report_to="wandb",
     save_total_limit=3,
