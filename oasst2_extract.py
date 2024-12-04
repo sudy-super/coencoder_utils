@@ -11,10 +11,10 @@ df_origin = pd.concat([train, val], axis=0).reset_index(drop=True)
 # 英語データのみを抽出
 df_origin_en = df_origin[df_origin["lang"] == "en"].copy()
 
-# 日本語翻訳データをロード（スプリットを指定）
+# 日本語翻訳データをロード（'train'スプリットのみ）
 ds_ja = load_dataset("kunishou/oasst2-135k-ja")
-df_ja_translations = ds_ja["train"].to_pandas()
-
+train_ja = ds_ja["train"].to_pandas()
+df_ja_translations = train_ja.reset_index(drop=True)
 
 # オリジナルデータと日本語翻訳データを結合
 df = pd.merge(df_origin, df_ja_translations[["message_id", "text_ja"]], on="message_id", how="left")
