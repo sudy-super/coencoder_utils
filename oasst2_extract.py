@@ -34,13 +34,14 @@ df_prompter_en = df_origin_en[df_origin_en["role"] == "prompter"].copy().set_ind
 df_assistant_ja = df_ja[df_ja["role"] == "assistant"].copy()
 df_prompter_ja = df_ja[df_ja["role"] == "prompter"].copy().set_index("message_id")
 
-# データ準備用の関数（parent_idが存在するものにフィルタリング）
+# データ準備用の関数（'message_id'を'id'にリネーム）
 def prepare_data(df_assistant, df_prompter):
     # parent_idがdf_prompterのインデックスに存在する行のみを残す
     df_assistant = df_assistant[df_assistant["parent_id"].isin(df_prompter.index)].copy()
     df_assistant["output"] = df_assistant["text"].values
     df_assistant["instruction"] = df_prompter.loc[df_assistant["parent_id"], "text"].values
-    df_assistant["parent_id"] = df_prompter.loc[df_assistant["parent_id"], "parent_id"].values
+    # 'message_id' を 'id' にリネーム
+    df_assistant = df_assistant.rename(columns={"message_id": "id"})
     df_assistant = df_assistant[
         ["instruction", "output", "id", "parent_id", "lang", "rank"]
     ]
