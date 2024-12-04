@@ -4,6 +4,7 @@ from transformers import Trainer, TrainingArguments, logging
 import torch
 from datasets import load_dataset
 import wandb
+from safetensors.torch import load_file
 
 # CoEncoderモデルとトークナイザーのインポート
 from transformers import AutoTokenizer, AutoModelForCausalLM
@@ -46,15 +47,25 @@ model.model_parallel = True
 
 tokenizer.text_tokenizer.pad_token = tokenizer.text_tokenizer.eos_token
 
-model.gradient_checkpointing_enable()
 
+connector_path = 'phase1_connector/model.safetensors'
+connector_state_dict = load_file(connector_path)
+
+# モデルのコネクタ部分に状態辞書をロード
+model.connector.load_state_dict(connector_state_dict)
+
+
+model.gradient_checkpointing_enable()
 
 # context_towerとlanguage_modelの重みを凍結
 for param in model.context_tower.parameters():
     param.requires_grad = False
 
+for param in model.connector.parameters():
+    param.requires_grad = True
+
 for param in model.language_model.parameters():
-    param.requires_grad = False
+    param.requires_grad = True
 
 
 # データセットの読み込み
