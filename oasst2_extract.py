@@ -13,9 +13,8 @@ df_origin_en = df_origin[df_origin["lang"] == "en"].copy()
 
 # 日本語翻訳データをロード（スプリットを指定）
 ds_ja = load_dataset("kunishou/oasst2-135k-ja")
-train_ja = ds_ja["train"].to_pandas()
-val_ja = ds_ja["validation"].to_pandas()
-df_ja_translations = pd.concat([train_ja, val_ja], axis=0).reset_index(drop=True)
+df_ja_translations = ds_ja["train"].to_pandas()
+
 
 # オリジナルデータと日本語翻訳データを結合
 df = pd.merge(df_origin, df_ja_translations[["message_id", "text_ja"]], on="message_id", how="left")
