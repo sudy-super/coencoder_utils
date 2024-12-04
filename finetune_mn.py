@@ -51,8 +51,17 @@ tokenizer.text_tokenizer.pad_token = tokenizer.text_tokenizer.eos_token
 connector_path = 'phase1_connector/model.safetensors'
 connector_state_dict = load_file(connector_path)
 
-# モデルのコネクタ部分に状態辞書をロード
-model.connector.load_state_dict(connector_state_dict)
+# "connector." プレフィックスを削除
+adjusted_connector_state_dict = {}
+for key, value in connector_state_dict.items():
+    if key.startswith('connector.'):
+        new_key = key[len('connector.'):]  # "connector."の部分を削除
+        adjusted_connector_state_dict[new_key] = value
+    else:
+        adjusted_connector_state_dict[key] = value
+
+# 修正した状態辞書をモデルのコネクタにロード
+model.connector.load_state_dict(adjusted_connector_state_dict)
 
 
 model.gradient_checkpointing_enable()
