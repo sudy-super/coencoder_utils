@@ -77,6 +77,19 @@ val_data = dataset["validation"]
 test_data = dataset["test"]
 
 
+dataset_ja = load_dataset("sudy-super/coencoder_oasst2_ja")
+dataset_en = load_dataset("sudy-super/coencoder_oasst2_en")
+
+# 各データセットのスプリットを取得
+train_data_ja = dataset_ja["train"]
+val_data_ja = dataset_ja["validation"]
+test_data_ja = dataset_ja["test"]
+
+train_data_en = dataset_en["train"]
+val_data_en = dataset_en["validation"]
+test_data_en = dataset_en["test"]
+
+
 # `generate_inputs`関数をバッチ処理に対応
 def generate_inputs(batch):
     contexts = []
@@ -237,10 +250,6 @@ train_data = train_data.filter(lambda x: x['text_length'] <= max_text_length, nu
 val_data = val_data.filter(lambda x: x['text_length'] <= max_text_length, num_proc=8)
 test_data = test_data.filter(lambda x: x['text_length'] <= max_text_length, num_proc=8)
 
-# データセットの件数をカウントして表示
-print(f"Number of train samples: {len(train_data)}")
-print(f"Number of validation samples: {len(val_data)}")
-print(f"Number of test samples: {len(test_data)}")
 
 from datasets import concatenate_datasets, Dataset
 
@@ -273,6 +282,61 @@ train_data_unused = train_data.select(range(num_train_samples, len(train_data)))
 num_eval_samples = int(0.6 * len(eval_data))
 eval_data_used = eval_data.select(range(num_eval_samples))
 eval_data_unused = eval_data.select(range(num_eval_samples, len(eval_data)))
+
+
+train_data_ja = train_data_ja.shuffle(seed=42)
+val_data_ja = val_data_ja.shuffle(seed=42)
+test_data_ja = test_data_ja.shuffle(seed=42)
+
+train_data_en = train_data_en.shuffle(seed=42)
+val_data_en = val_data_en.shuffle(seed=42)
+test_data_en = test_data_en.shuffle(seed=42)
+
+# 前処理とトークン化を新しいデータセットにも適用
+def preprocess_and_tokenize(dataset, desc_prefix):
+    dataset = dataset.map(
+        generate_inputs,
+        batched=True,
+        num_proc=8,
+        desc=f"Generating inputs for {desc_prefix}",
+        load_from_cache_file=True
+    ).filter(lambda x: x['text'] != '', num_proc=4).filter(lambda x: x['context'] != '', num_proc=4)
+
+    dataset = dataset.map(
+        tokenize,
+        batched=True,
+        num_proc=8,
+        remove_columns=dataset.column_names,
+        desc=f"Tokenizing {desc_prefix}",
+        load_from_cache_file=True
+    )
+
+    dataset = dataset.filter(lambda x: x['text_length'] <= max_text_length, num_proc=8)
+    return dataset
+
+train_data_ja = preprocess_and_tokenize(train_data_ja, "train_data_ja")
+val_data_ja = preprocess_and_tokenize(val_data_ja, "val_data_ja")
+test_data_ja = preprocess_and_tokenize(test_data_ja, "test_data_ja")
+
+train_data_en = preprocess_and_tokenize(train_data_en, "train_data_en")
+val_data_en = preprocess_and_tokenize(val_data_en, "val_data_en")
+test_data_en = preprocess_and_tokenize(test_data_en, "test_data_en")
+
+
+# データセットの統合
+train_data_used = concatenate_datasets([train_data_unused, train_data_ja, train_data_en])
+eval_data_used = concatenate_datasets([eval_data_unused, val_data_ja, val_data_en])
+test_data = concatenate_datasets([test_data, test_data_ja, test_data_en])
+
+train_data_used = train_data_used.shuffle(seed=42)
+eval_data_used = eval_data_used.shuffle(seed=42)
+test_data = test_data.shuffle(seed=42)
+
+
+# データセットの件数をカウントして表示
+print(f"Number of train samples: {len(train_data_used)}")
+print(f"Number of validation samples: {len(eval_data_used)}")
+print(f"Number of test samples: {len(test_data)}")
 
 # train_data_sorted = train_data_used.sort('length')
 
