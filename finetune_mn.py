@@ -95,7 +95,7 @@ Today Date: 9 Nov 2024
 # `tokenize`関数をバッチ処理に対応
 def tokenize(batch):
     # 最大トークン数の設定
-    max_context_tokens = 98304
+    max_context_tokens = 131072
 
     # 各サンプルに対してcontextのトークン数を確認し、必要に応じてカット
     truncated_contexts = []
@@ -221,9 +221,10 @@ test_data = test_data.map(
     load_from_cache_file=True
 )
 
-train_data = train_data.filter(lambda x: x['text_length'] <= 4096, num_proc=8)
-val_data = val_data.filter(lambda x: x['text_length'] <= 4096, num_proc=8)
-test_data = test_data.filter(lambda x: x['text_length'] <= 4096, num_proc=8)
+max_text_length = 2048
+train_data = train_data.filter(lambda x: x['text_length'] <= max_text_length, num_proc=8)
+val_data = val_data.filter(lambda x: x['text_length'] <= max_text_length, num_proc=8)
+test_data = test_data.filter(lambda x: x['text_length'] <= max_text_length, num_proc=8)
 
 # データセットの件数をカウントして表示
 print(f"Number of train samples: {len(train_data)}")
