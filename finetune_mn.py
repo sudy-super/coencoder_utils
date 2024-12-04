@@ -176,7 +176,7 @@ train_data = train_data.map(
     batched=True,
     num_proc=8,
     desc="Generating inputs for train data",
-    load_from_cache_file=False
+    load_from_cache_file=True
 ).filter(lambda x: x['text'] != '', num_proc=4).filter(lambda x: x['context'] != '', num_proc=4)
 
 val_data = val_data.map(
@@ -184,7 +184,7 @@ val_data = val_data.map(
     batched=True,
     num_proc=8,
     desc="Generating inputs for validation data",
-    load_from_cache_file=False
+    load_from_cache_file=True
 ).filter(lambda x: x['text'] != '', num_proc=4).filter(lambda x: x['context'] != '', num_proc=4)
 
 test_data = test_data.map(
@@ -192,7 +192,7 @@ test_data = test_data.map(
     batched=True,
     num_proc=8,
     desc="Generating inputs for test data",
-    load_from_cache_file=False
+    load_from_cache_file=True
 ).filter(lambda x: x['text'] != '', num_proc=4).filter(lambda x: x['context'] != '', num_proc=4)
 
 # データのトークン化（キャッシュファイル名を削除）
@@ -202,7 +202,7 @@ train_data = train_data.map(
     num_proc=8,
     remove_columns=train_data.column_names,
     desc="Tokenizing train data",
-    load_from_cache_file=False
+    load_from_cache_file=True
 )
 val_data = val_data.map(
     tokenize,
@@ -210,7 +210,7 @@ val_data = val_data.map(
     num_proc=8,
     remove_columns=val_data.column_names,
     desc="Tokenizing validation data",
-    load_from_cache_file=False
+    load_from_cache_file=True
 )
 test_data = test_data.map(
     tokenize,
@@ -218,7 +218,7 @@ test_data = test_data.map(
     num_proc=8,
     remove_columns=test_data.column_names,
     desc="Tokenizing test data",
-    load_from_cache_file=False
+    load_from_cache_file=True
 )
 
 max_text_length = 2048
