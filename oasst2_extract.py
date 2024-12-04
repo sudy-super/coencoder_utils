@@ -34,17 +34,13 @@ df_prompter_en = df_origin_en[df_origin_en["role"] == "prompter"].copy().set_ind
 df_assistant_ja = df_ja[df_ja["role"] == "assistant"].copy()
 df_prompter_ja = df_ja[df_ja["role"] == "prompter"].copy().set_index("message_id")
 
-# データ準備用の関数
+# データ準備用の関数（parent_idが存在するものにフィルタリング）
 def prepare_data(df_assistant, df_prompter):
+    # parent_idがdf_prompterのインデックスに存在する行のみを残す
+    df_assistant = df_assistant[df_assistant["parent_id"].isin(df_prompter.index)].copy()
     df_assistant["output"] = df_assistant["text"].values
-    instructions = []
-    parent_ids = []
-    for _, row in df_assistant.iterrows():
-        parent = df_prompter.loc[row["parent_id"]]
-        instructions.append(parent["text"])
-        parent_ids.append(parent["parent_id"])
-    df_assistant["instruction"] = instructions
-    df_assistant["parent_id"] = parent_ids
+    df_assistant["instruction"] = df_prompter.loc[df_assistant["parent_id"], "text"].values
+    df_assistant["parent_id"] = df_prompter.loc[df_assistant["parent_id"], "parent_id"].values
     df_assistant = df_assistant[
         ["instruction", "output", "id", "parent_id", "lang", "rank"]
     ]
@@ -54,16 +50,25 @@ def prepare_data(df_assistant, df_prompter):
 df_assistant_en = prepare_data(df_assistant_en, df_prompter_en)
 df_assistant_ja = prepare_data(df_assistant_ja, df_prompter_ja)
 
-# 指定された件数をランダムに抽出
-df_en_sampled = df_assistant_en.sample(n=37080, random_state=42)
-df_ja_sampled = df_assistant_ja.sample(n=4120, random_state=42)
+# データ数の確認
+print("英語アシスタントデータの総数（parent_idが存在する）：", len(df_assistant_en))
+print("日本語アシスタントデータの総数（parent_idが存在する）：", len(df_assistant_ja))
+
+# 指定された件数をランダムに抽出（データ数を超えないように調整）
+n_en_samples = min(37080, len(df_assistant_en))
+n_ja_samples = min(4120, len(df_assistant_ja))
+
+df_en_sampled = df_assistant_en.sample(n=n_en_samples, random_state=42)
+df_ja_sampled = df_assistant_ja.sample(n=n_ja_samples, random_state=42)
 
 # 英語データの分割
-df_en_train, df_en_temp = train_test_split(df_en_sampled, test_size=1080, random_state=42)
+test_size_en = 1080 if n_en_samples >= 37080 else int(n_en_samples * (1080 / 37080))
+df_en_train, df_en_temp = train_test_split(df_en_sampled, test_size=test_size_en, random_state=42)
 df_en_val, df_en_test = train_test_split(df_en_temp, test_size=270/1080, random_state=42)
 
 # 日本語データの分割
-df_ja_train, df_ja_temp = train_test_split(df_ja_sampled, test_size=120, random_state=42)
+test_size_ja = 120 if n_ja_samples >= 4120 else int(n_ja_samples * (120 / 4120))
+df_ja_train, df_ja_temp = train_test_split(df_ja_sampled, test_size=test_size_ja, random_state=42)
 df_ja_val, df_ja_test = train_test_split(df_ja_temp, test_size=30/120, random_state=42)
 
 # データリスト作成用の関数（指定されたデータ構造に対応）
