@@ -221,7 +221,7 @@ test_data = test_data.map(
     load_from_cache_file=True
 )
 
-max_text_length = 2048
+max_text_length = 1024
 train_data = train_data.filter(lambda x: x['text_length'] <= max_text_length, num_proc=8)
 val_data = val_data.filter(lambda x: x['text_length'] <= max_text_length, num_proc=8)
 test_data = test_data.filter(lambda x: x['text_length'] <= max_text_length, num_proc=8)
