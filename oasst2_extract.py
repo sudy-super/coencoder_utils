@@ -11,8 +11,11 @@ df_origin = pd.concat([train, val], axis=0).reset_index(drop=True)
 # 英語データのみを抽出
 df_origin_en = df_origin[df_origin["lang"] == "en"].copy()
 
-# 日本語翻訳データをロード
-df_ja_translations = load_dataset("kunishou/oasst2-135k-ja").to_pandas()
+# 日本語翻訳データをロード（スプリットを指定）
+ds_ja = load_dataset("kunishou/oasst2-135k-ja")
+train_ja = ds_ja["train"].to_pandas()
+val_ja = ds_ja["validation"].to_pandas()
+df_ja_translations = pd.concat([train_ja, val_ja], axis=0).reset_index(drop=True)
 
 # オリジナルデータと日本語翻訳データを結合
 df = pd.merge(df_origin, df_ja_translations[["message_id", "text_ja"]], on="message_id", how="left")
@@ -44,8 +47,8 @@ def prepare_data(df_assistant, df_prompter):
     df_assistant["instruction"] = instructions
     df_assistant["parent_id"] = parent_ids
     df_assistant = df_assistant[
-        ["instruction", "output", "message_id", "parent_id", "lang", "rank"]
-    ].rename(columns={"message_id": "id"})
+        ["instruction", "output", "id", "parent_id", "lang", "rank"]
+    ]
     return df_assistant
 
 # 英語と日本語のデータを準備
@@ -64,7 +67,7 @@ df_en_val, df_en_test = train_test_split(df_en_temp, test_size=270/1080, random_
 df_ja_train, df_ja_temp = train_test_split(df_ja_sampled, test_size=120, random_state=42)
 df_ja_val, df_ja_test = train_test_split(df_ja_temp, test_size=30/120, random_state=42)
 
-# データリスト作成用の関数（新しいデータ構造に対応）
+# データリスト作成用の関数（指定されたデータ構造に対応）
 def create_data_list(df):
     return [
         {
