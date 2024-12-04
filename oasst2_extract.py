@@ -28,18 +28,32 @@ df_ja = df_ja[~df_ja["text_ja"].isnull()].copy()
 
 # 英語のアシスタントとプロンプターのメッセージを抽出
 df_assistant_en = df_origin_en[df_origin_en["role"] == "assistant"].copy()
-df_prompter_en = df_origin_en[df_origin_en["role"] == "prompter"].copy().set_index("message_id")
+
+# df_prompter_enの重複を削除し、インデックスを設定
+df_prompter_en = df_origin_en[df_origin_en["role"] == "prompter"].copy()
+df_prompter_en = df_prompter_en.drop_duplicates(subset="message_id")
+df_prompter_en = df_prompter_en.set_index("message_id")
 
 # 日本語のアシスタントとプロンプターのメッセージを抽出
 df_assistant_ja = df_ja[df_ja["role"] == "assistant"].copy()
-df_prompter_ja = df_ja[df_ja["role"] == "prompter"].copy().set_index("message_id")
+
+# df_prompter_jaの重複を削除し、インデックスを設定
+df_prompter_ja = df_ja[df_ja["role"] == "prompter"].copy()
+df_prompter_ja = df_prompter_ja.drop_duplicates(subset="message_id")
+df_prompter_ja = df_prompter_ja.set_index("message_id")
 
 # データ準備用の関数（'message_id'を'id'にリネーム）
 def prepare_data(df_assistant, df_prompter):
     # parent_idがdf_prompterのインデックスに存在する行のみを残す
     df_assistant = df_assistant[df_assistant["parent_id"].isin(df_prompter.index)].copy()
     df_assistant["output"] = df_assistant["text"].values
+
+    # インデックスがユニークであることを確認
+    assert df_prompter.index.is_unique, "df_prompterのインデックスがユニークではありません。"
+
+    # instructionを取得
     df_assistant["instruction"] = df_prompter.loc[df_assistant["parent_id"], "text"].values
+
     # 'message_id' を 'id' にリネーム
     df_assistant = df_assistant.rename(columns={"message_id": "id"})
     df_assistant = df_assistant[
