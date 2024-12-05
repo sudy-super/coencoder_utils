@@ -220,7 +220,7 @@ train_data = train_data.map(
     num_proc=8,
     desc="Generating inputs for train data",
     load_from_cache_file=True
-).filter(lambda x: x['text'] != '', num_proc=4).filter(lambda x: x['context'] != '', num_proc=4)
+).filter(lambda x: x['text'] != '', num_proc=8).filter(lambda x: x['context'] != '', num_proc=8)
 
 val_data = val_data.map(
     generate_inputs,
@@ -228,7 +228,7 @@ val_data = val_data.map(
     num_proc=8,
     desc="Generating inputs for validation data",
     load_from_cache_file=True
-).filter(lambda x: x['text'] != '', num_proc=4).filter(lambda x: x['context'] != '', num_proc=4)
+).filter(lambda x: x['text'] != '', num_proc=8).filter(lambda x: x['context'] != '', num_proc=8)
 
 test_data = test_data.map(
     generate_inputs,
@@ -236,7 +236,7 @@ test_data = test_data.map(
     num_proc=8,
     desc="Generating inputs for test data",
     load_from_cache_file=True
-).filter(lambda x: x['text'] != '', num_proc=4).filter(lambda x: x['context'] != '', num_proc=4)
+).filter(lambda x: x['text'] != '', num_proc=8).filter(lambda x: x['context'] != '', num_proc=8)
 
 # データのトークン化（キャッシュファイル名を削除）
 train_data = train_data.map(
@@ -319,7 +319,7 @@ def preprocess_and_tokenize(dataset, desc_prefix):
         num_proc=8,
         desc=f"Generating inputs for {desc_prefix}",
         load_from_cache_file=True
-    ).filter(lambda x: x['text'] != '', num_proc=4).filter(lambda x: x['context'] != '', num_proc=4)
+    ).filter(lambda x: x['text'] != '', num_proc=8).filter(lambda x: x['context'] != '', num_proc=8)
 
     dataset = dataset.map(
         tokenize,
@@ -568,8 +568,8 @@ args = TrainingArguments(
     logging_strategy="steps",
     eval_strategy="steps",
     save_strategy="steps",
-    eval_steps=78,
-    save_steps=419,
+    eval_steps=73,
+    save_steps=316,
     output_dir="output",
     report_to="wandb",
     save_total_limit=3,
@@ -600,6 +600,7 @@ trainer.train()
 
 # 学習済みモデルの保存
 model.save_pretrained("co_output_model")
+torch.save(model.connector.state_dict(), "co_output_model/connector_params.pt")
 
 # テストデータでの評価または予測
 test_results = trainer.predict(test_dataset=test_data)
