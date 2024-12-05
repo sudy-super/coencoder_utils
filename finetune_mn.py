@@ -51,9 +51,11 @@ tokenizer.text_tokenizer.pad_token = tokenizer.text_tokenizer.eos_token
 connector_path = 'phase1_connector/model.safetensors'
 connector_state_dict = load_file(connector_path)
 
+"""
 print("model.safetensorsに含まれる重みの名前:")
 for key in connector_state_dict.keys():
     print(key)
+"""
 
 # "connector." プレフィックスを削除
 adjusted_connector_state_dict = {}
@@ -62,7 +64,7 @@ for key, value in connector_state_dict.items():
         new_key = key[len('connector.'):]  # "connector."の部分を削除
         adjusted_connector_state_dict[new_key] = value
     else:
-        adjusted_connector_state_dict[key] = value
+        pass
 
 # 修正した状態辞書をモデルのコネクタにロード
 model.connector.load_state_dict(adjusted_connector_state_dict)
