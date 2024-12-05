@@ -47,7 +47,7 @@ model.model_parallel = True
 
 tokenizer.text_tokenizer.pad_token = tokenizer.text_tokenizer.eos_token
 
-
+"""
 connector_path = 'phase1_connector/model.safetensors'
 connector_state_dict = load_file(connector_path)
 
@@ -67,6 +67,7 @@ for key in adjusted_connector_state_dict.keys():
 
 # 修正した状態辞書をモデルのコネクタにロード
 model.connector.load_state_dict(adjusted_connector_state_dict)
+"""
 
 
 model.gradient_checkpointing_enable()
@@ -79,7 +80,11 @@ for param in model.connector.parameters():
     param.requires_grad = True
 
 for param in model.language_model.parameters():
-    param.requires_grad = True
+    param.requires_grad = False
+
+for name, param in model.connector.named_parameters():
+    if param.requires_grad:
+        print(f"training param - {name}: {param.shape}")
 
 
 # データセットの読み込み
@@ -90,7 +95,7 @@ train_data = dataset["train"]
 val_data = dataset["validation"]
 test_data = dataset["test"]
 
-
+"""
 dataset_ja = load_dataset("sudy-super/coencoder_oasst2_ja")
 dataset_en = load_dataset("sudy-super/coencoder_oasst2_en")
 
@@ -102,7 +107,7 @@ test_data_ja = dataset_ja["test"]
 train_data_en = dataset_en["train"]
 val_data_en = dataset_en["validation"]
 test_data_en = dataset_en["test"]
-
+"""
 
 # `generate_inputs`関数をバッチ処理に対応
 def generate_inputs(batch):
@@ -297,7 +302,7 @@ num_eval_samples = int(0.6 * len(eval_data))
 eval_data_used = eval_data.select(range(num_eval_samples))
 eval_data_unused = eval_data.select(range(num_eval_samples, len(eval_data)))
 
-
+"""
 train_data_ja = train_data_ja.shuffle(seed=42)
 val_data_ja = val_data_ja.shuffle(seed=42)
 test_data_ja = test_data_ja.shuffle(seed=42)
@@ -345,7 +350,7 @@ test_data = concatenate_datasets([test_data, test_data_ja, test_data_en])
 train_data_used = train_data_used.shuffle(seed=42)
 eval_data_used = eval_data_used.shuffle(seed=42)
 test_data = test_data.shuffle(seed=42)
-
+"""
 
 # データセットの件数をカウントして表示
 print(f"Number of train samples: {len(train_data_used)}")
