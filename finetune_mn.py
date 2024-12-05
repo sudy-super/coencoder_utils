@@ -32,7 +32,7 @@ if dist.get_rank() == 0:
 
 torch.manual_seed(42)
 
-model_name = "sudy-super/coencoder_test2"
+model_name = "phase1_connector" # "sudy-super/coencoder_test2"
 
 # CoEncoderトークナイザーとモデルの読み込み
 tokenizer = CoEncoderDualTokenizer.from_pretrained("co_model", trust_remote_code=True)
@@ -46,26 +46,6 @@ model = CoEncoderForConditionalGeneration.from_pretrained(
 model.model_parallel = True
 
 tokenizer.text_tokenizer.pad_token = tokenizer.text_tokenizer.eos_token
-
-
-connector_path = 'phase1_connector/model.safetensors'
-connector_state_dict = load_file(connector_path)
-
-print("model.safetensorsに含まれる重みの名前:")
-for key in connector_state_dict.keys():
-    print(key)
-
-# "connector." プレフィックスを削除
-adjusted_connector_state_dict = {}
-for key, value in connector_state_dict.items():
-    if key.startswith('connector.'):
-        new_key = key[len('connector.'):]  # "connector."の部分を削除
-        adjusted_connector_state_dict[new_key] = value
-    else:
-        adjusted_connector_state_dict[key] = value
-
-# 修正した状態辞書をモデルのコネクタにロード
-model.connector.load_state_dict(adjusted_connector_state_dict)
 
 
 model.gradient_checkpointing_enable()
@@ -113,7 +93,7 @@ def generate_inputs(batch):
         text = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 
 Cutting Knowledge Date: December 2023
-Today Date: 9 Nov 2024
+Today Date: 5 Dec 2024
 
 <|eot_id|>"""
         for c in conversations:
