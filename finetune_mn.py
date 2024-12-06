@@ -48,10 +48,6 @@ model.model_parallel = True
 tokenizer.text_tokenizer.pad_token = tokenizer.text_tokenizer.eos_token
 
 ""
-connector_params = torch.load("phase1_connector/connector_params.pt")
-for name, param in connector_params.items():
-    print(f"{name}: {param.shape}")
-
 connector_path = "phase1_connector/pytorch_model.bin" # 'phase1_connector/model.safetensors'
 connector_state_dict = torch.load(connector_path) # load_file(connector_path)
 
