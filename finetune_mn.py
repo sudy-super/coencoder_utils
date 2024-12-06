@@ -47,7 +47,7 @@ model.model_parallel = True
 
 tokenizer.text_tokenizer.pad_token = tokenizer.text_tokenizer.eos_token
 
-""
+"""
 connector_params = torch.load("phase1_connector/connector_params.pt")
 for name, param in connector_params.items():
     print(f"{name}: {param.shape}")
@@ -71,7 +71,7 @@ for key in adjusted_connector_state_dict.keys():
 
 # 修正した状態辞書をモデルのコネクタにロード
 model.connector.load_state_dict(adjusted_connector_state_dict)
-""
+"""
 
 
 model.gradient_checkpointing_enable()
