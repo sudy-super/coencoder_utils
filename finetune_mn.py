@@ -47,7 +47,7 @@ model.model_parallel = True
 
 tokenizer.text_tokenizer.pad_token = tokenizer.text_tokenizer.eos_token
 
-"""
+""
 connector_params = torch.load("phase1_connector/connector_params.pt")
 for name, param in connector_params.items():
     print(f"{name}: {param.shape}")
@@ -65,13 +65,13 @@ for key, value in connector_state_dict.items():
     else:
         pass
 
-print("model.safetensorsに含まれる重みの名前:")
+print("モデルファイルに含まれる重みの名前:")
 for key in adjusted_connector_state_dict.keys():
     print(key, adjusted_connector_state_dict[key].shape)
 
 # 修正した状態辞書をモデルのコネクタにロード
 model.connector.load_state_dict(adjusted_connector_state_dict)
-"""
+""
 
 
 model.gradient_checkpointing_enable()
@@ -604,7 +604,6 @@ trainer.train()
 
 # 学習済みモデルの保存
 model.save_pretrained("co_output_model", safe_serialization=False)
-model.connector.save_pretrained("co_output_model_connector", safe_serialization=True)
 torch.save(model.connector.state_dict(), "co_output_model/connector_params.pt")
 
 # テストデータでの評価または予測
