@@ -48,8 +48,12 @@ model.model_parallel = True
 tokenizer.text_tokenizer.pad_token = tokenizer.text_tokenizer.eos_token
 
 ""
-connector_path = 'phase1_connector/model.safetensors'
-connector_state_dict = load_file(connector_path)
+connector_params = torch.load("phase1_connector/connector_params.pt")
+for name, param in connector_params.items():
+    print(f"{name}: {param.shape}")
+
+connector_path = "phase1_connector/pytorch_model.bin" # 'phase1_connector/model.safetensors'
+connector_state_dict = torch.load(connector_path) # load_file(connector_path)
 
 
 # "connector." プレフィックスを削除
@@ -80,7 +84,7 @@ for param in model.connector.parameters():
     param.requires_grad = True
 
 for param in model.language_model.parameters():
-    param.requires_grad = True
+    param.requires_grad = False
 
 for name, param in model.connector.named_parameters():
     if param.requires_grad:
@@ -95,7 +99,7 @@ train_data = dataset["train"]
 val_data = dataset["validation"]
 test_data = dataset["test"]
 
-""
+"""
 dataset_ja = load_dataset("sudy-super/coencoder_oasst2_ja")
 dataset_en = load_dataset("sudy-super/coencoder_oasst2_en")
 
@@ -107,7 +111,7 @@ test_data_ja = dataset_ja["test"]
 train_data_en = dataset_en["train"]
 val_data_en = dataset_en["validation"]
 test_data_en = dataset_en["test"]
-""
+"""
 
 # `generate_inputs`関数をバッチ処理に対応
 def generate_inputs(batch):
@@ -119,7 +123,7 @@ def generate_inputs(batch):
         text = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 
 Cutting Knowledge Date: December 2023
-Today Date: 6 Dec 2024
+Today Date: 5 Dec 2024
 
 <|eot_id|>"""
         for c in conversations:
@@ -302,7 +306,7 @@ num_eval_samples = int(0.6 * len(eval_data))
 eval_data_used = eval_data.select(range(num_eval_samples))
 eval_data_unused = eval_data.select(range(num_eval_samples, len(eval_data)))
 
-""
+"""
 train_data_ja = train_data_ja.shuffle(seed=42)
 val_data_ja = val_data_ja.shuffle(seed=42)
 test_data_ja = test_data_ja.shuffle(seed=42)
@@ -350,7 +354,7 @@ test_data = concatenate_datasets([test_data, test_data_ja, test_data_en])
 train_data_used = train_data_used.shuffle(seed=42)
 eval_data_used = eval_data_used.shuffle(seed=42)
 test_data = test_data.shuffle(seed=42)
-""
+"""
 
 # データセットの件数をカウントして表示
 print(f"Number of train samples: {len(train_data_used)}")
@@ -556,8 +560,8 @@ args = TrainingArguments(
     num_train_epochs=1,
     per_device_train_batch_size=1,
     per_device_eval_batch_size=1,
-    gradient_accumulation_steps=1,
-    learning_rate=2e-5,
+    gradient_accumulation_steps=2,
+    learning_rate=1e-3,
     adam_beta2=0.95,
     weight_decay=0.0,
     lr_scheduler_type="cosine",
@@ -599,7 +603,7 @@ trainer = CustomTrainer(
 trainer.train()
 
 # 学習済みモデルの保存
-model.save_pretrained("co_output_model")
+model.save_pretrained("co_output_model", safe_serialization=False)
 torch.save(model.connector.state_dict(), "co_output_model/connector_params.pt")
 
 # テストデータでの評価または予測
