@@ -604,6 +604,7 @@ trainer.train()
 
 # 学習済みモデルの保存
 model.save_pretrained("co_output_model", safe_serialization=False)
+model.connector.save_pretrained("co_output_model_connector", safe_serialization=True)
 torch.save(model.connector.state_dict(), "co_output_model/connector_params.pt")
 
 # テストデータでの評価または予測
