@@ -32,12 +32,12 @@ if dist.get_rank() == 0:
 
 torch.manual_seed(42)
 
-model_name = "sudy-super/coencoder_test2"
+model_name = "sudy-super/coencoder_test2_phase1" # "sudy-super/coencoder_test2"
 
 # CoEncoderトークナイザーとモデルの読み込み
 tokenizer = CoEncoderDualTokenizer.from_pretrained("co_model", trust_remote_code=True)
 model = CoEncoderForConditionalGeneration.from_pretrained(
-    "phase1_connector", # model_name,
+    model_name,
     torch_dtype=torch.bfloat16,
     trust_remote_code=True,
     attn_implementation="flash_attention_2"
@@ -46,28 +46,6 @@ model = CoEncoderForConditionalGeneration.from_pretrained(
 model.model_parallel = True
 
 tokenizer.text_tokenizer.pad_token = tokenizer.text_tokenizer.eos_token
-
-"""
-connector_path = "phase1_connector/model.safetensors" # 'phase1_connector/pytorch_model.bin'
-connector_state_dict = load_file(connector_path) # torch.load(connector_path)
-
-
-# "connector." プレフィックスを削除
-adjusted_connector_state_dict = {}
-for key, value in connector_state_dict.items():
-    if key.startswith('connector.'):
-        new_key = key[len('connector.'):]  # "connector."の部分を削除
-        adjusted_connector_state_dict[new_key] = value
-    else:
-        pass
-
-print("モデルファイルに含まれる重みの名前:")
-for key in adjusted_connector_state_dict.keys():
-    print(key, adjusted_connector_state_dict[key].shape)
-
-# 修正した状態辞書をモデルのコネクタにロード
-model.connector.load_state_dict(adjusted_connector_state_dict)
-"""
 
 
 model.gradient_checkpointing_enable()
@@ -95,7 +73,7 @@ train_data = dataset["train"]
 val_data = dataset["validation"]
 test_data = dataset["test"]
 
-"""
+""
 dataset_ja = load_dataset("sudy-super/coencoder_oasst2_ja")
 dataset_en = load_dataset("sudy-super/coencoder_oasst2_en")
 
@@ -107,7 +85,7 @@ test_data_ja = dataset_ja["test"]
 train_data_en = dataset_en["train"]
 val_data_en = dataset_en["validation"]
 test_data_en = dataset_en["test"]
-"""
+""
 
 # `generate_inputs`関数をバッチ処理に対応
 def generate_inputs(batch):
@@ -302,7 +280,7 @@ num_eval_samples = int(0.6 * len(eval_data))
 eval_data_used = eval_data.select(range(num_eval_samples))
 eval_data_unused = eval_data.select(range(num_eval_samples, len(eval_data)))
 
-"""
+""
 train_data_ja = train_data_ja.shuffle(seed=42)
 val_data_ja = val_data_ja.shuffle(seed=42)
 test_data_ja = test_data_ja.shuffle(seed=42)
@@ -350,7 +328,7 @@ test_data = concatenate_datasets([test_data, test_data_ja, test_data_en])
 train_data_used = train_data_used.shuffle(seed=42)
 eval_data_used = eval_data_used.shuffle(seed=42)
 test_data = test_data.shuffle(seed=42)
-"""
+""
 
 # データセットの件数をカウントして表示
 print(f"Number of train samples: {len(train_data_used)}")
@@ -556,8 +534,8 @@ args = TrainingArguments(
     num_train_epochs=1,
     per_device_train_batch_size=1,
     per_device_eval_batch_size=1,
-    gradient_accumulation_steps=2,
-    learning_rate=1e-3,
+    gradient_accumulation_steps=1,
+    learning_rate=2e-5,
     adam_beta2=0.95,
     weight_decay=0.0,
     lr_scheduler_type="cosine",
