@@ -28,7 +28,7 @@ dist.init_process_group(backend='nccl')  # 必要に応じてバックエンド�
 
 # グローバルランク0のプロセスのみでWandBを初期化
 if dist.get_rank() == 0:
-    wandb.init(project="coencoder_finetune_mn", name="1e-3_coencoder_connector_llm", entity="sudy_super")
+    wandb.init(project="coencoder_finetune_mn", name="1e-3_coencoder_llm", entity="sudy_super")
 
 torch.manual_seed(42)
 
@@ -37,7 +37,7 @@ model_name = "sudy-super/coencoder_test2"
 # CoEncoderトークナイザーとモデルの読み込み
 tokenizer = CoEncoderDualTokenizer.from_pretrained("co_model", trust_remote_code=True)
 model = CoEncoderForConditionalGeneration.from_pretrained(
-    model_name,
+    "phase1_connector", # model_name,
     torch_dtype=torch.bfloat16,
     trust_remote_code=True,
     attn_implementation="flash_attention_2"
