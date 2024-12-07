@@ -333,6 +333,13 @@ eval_data_used = eval_data_used.shuffle(seed=42)
 test_data = test_data.shuffle(seed=42)
 ""
 
+print(f"Number of train samples(unused): {len(train_data_unused)}")
+print(f"Number of validation samples(unused): {len(eval_data_unused)}")
+print(f"Number of train samples(ja): {len(train_data_ja)}")
+print(f"Number of validation samples(ja): {len(val_data_ja)}")
+print(f"Number of train samples(en): {len(train_data_en)}")
+print(f"Number of validation samples(en): {len(val_data_en)}")
+
 # データセットの件数をカウントして表示
 print(f"Number of train samples: {len(train_data_used)}")
 print(f"Number of validation samples: {len(eval_data_used)}")
