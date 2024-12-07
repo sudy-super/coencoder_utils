@@ -28,7 +28,7 @@ dist.init_process_group(backend='nccl')  # 必要に応じてバックエンド�
 
 # グローバルランク0のプロセスのみでWandBを初期化
 if dist.get_rank() == 0:
-    wandb.init(project="coencoder_finetune_mn", name="1e-3_coencoder_llm", entity="sudy_super")
+    wandb.init(project="coencoder_finetune_mn", name="2e-5_coencoder_llm", entity="sudy_super")
 
 torch.manual_seed(42)
 
@@ -89,15 +89,18 @@ test_data_en = dataset_en["test"]
 
 # `generate_inputs`関数をバッチ処理に対応
 def generate_inputs(batch):
+    conversations_list = batch["conversations"]
+    contexts_list = batch.get("context", [""] * len(conversations_list))
+
     contexts = []
     texts = []
-    for context, conversations in zip(batch.get("context", []), batch["conversations"]):
+    for context, conversations in zip(contexts_list, conversations_list):
         if not context:
             context = ""  # contextがNoneまたは空の場合、空文字列に設定
         text = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 
 Cutting Knowledge Date: December 2023
-Today Date: 5 Dec 2024
+Today Date: 8 Dec 2024
 
 <|eot_id|>"""
         for c in conversations:
