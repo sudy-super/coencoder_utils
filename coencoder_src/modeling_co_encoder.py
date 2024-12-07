@@ -270,8 +270,7 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
 
         # Calculate dynamic output sizes (batch_size,)
         dynamic_output_sizes = (
-            scaled_batch_means * (self.output_size_max - self.output_size_min)
-            + self.output_size_min
+            (scaled_batch_means * (self.output_size_max - self.output_size_min)) + self.output_size_min
         ).int().squeeze(-1)
 
         # Get the maximum output size across the batch
