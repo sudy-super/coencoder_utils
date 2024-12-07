@@ -58,7 +58,7 @@ for param in model.connector.parameters():
     param.requires_grad = True
 
 for param in model.language_model.parameters():
-    param.requires_grad = False
+    param.requires_grad = True
 
 for name, param in model.connector.named_parameters():
     if param.requires_grad:
@@ -549,8 +549,8 @@ args = TrainingArguments(
     logging_strategy="steps",
     eval_strategy="steps",
     save_strategy="steps",
-    eval_steps=73,
-    save_steps=316,
+    eval_steps=104, # Phase1: 73
+    save_steps=1249, # Phase1: 316
     output_dir="output",
     report_to="wandb",
     save_total_limit=3,
