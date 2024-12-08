@@ -89,12 +89,12 @@ test_data_en = dataset_en["test"]
 
 # `generate_inputs`関数をバッチ処理に対応
 def generate_inputs(batch):
-    conversations_list = batch["conversations"]
-    contexts_list = batch.get("context", [""] * len(conversations_list))
+    # conversations_list = batch["conversations"]
+    # contexts_list = batch.get("context", [""] * len(conversations_list))
 
     contexts = []
     texts = []
-    for context, conversations in zip(contexts_list, conversations_list):
+    for context, conversations in zip(batch.get("context", [""]), batch["conversations"]): # for context, conversations in zip(contexts_list, conversations_list):
         if not context:
             context = ""  # contextがNoneまたは空の場合、空文字列に設定
         text = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
@@ -321,6 +321,32 @@ test_data_ja = preprocess_and_tokenize(test_data_ja, "test_data_ja")
 train_data_en = preprocess_and_tokenize(train_data_en, "train_data_en")
 val_data_en = preprocess_and_tokenize(val_data_en, "val_data_en")
 test_data_en = preprocess_and_tokenize(test_data_en, "test_data_en")
+
+
+from datasets import Features, Sequence, Value
+
+desired_features = Features({
+    'context_input_ids': Sequence(Value("int32")),
+    'context_attention_mask': Sequence(Value("int8")),
+    'input_ids': Sequence(Value("int32")),
+    'attention_mask': Sequence(Value("int8")),
+    'length': Value("int64"),
+    'text_length': Value("int64"),
+})
+
+# トークナイズ後、全てのデータセットに対してスキーマキャストを行う
+train_data_unused = train_data_unused.cast(desired_features)
+eval_data_unused = eval_data_unused.cast(desired_features)
+test_data = test_data.cast(desired_features)
+
+# ja, enのデータセットにも同様
+train_data_ja = train_data_ja.cast(desired_features)
+val_data_ja = val_data_ja.cast(desired_features)
+test_data_ja = test_data_ja.cast(desired_features)
+
+train_data_en = train_data_en.cast(desired_features)
+val_data_en = val_data_en.cast(desired_features)
+test_data_en = test_data_en.cast(desired_features)
 
 
 # データセットの統合
