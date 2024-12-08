@@ -300,7 +300,7 @@ def preprocess_and_tokenize(dataset, desc_prefix):
         num_proc=8,
         desc=f"Generating inputs for {desc_prefix}",
         load_from_cache_file=True
-    ).filter(lambda x: x['text'] != '', num_proc=8).filter(lambda x: x['context'] != '', num_proc=8)
+    ).filter(lambda x: x['text'] != '', num_proc=8)
 
     dataset = dataset.map(
         tokenize,
