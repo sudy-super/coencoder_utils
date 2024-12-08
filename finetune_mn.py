@@ -89,12 +89,12 @@ test_data_en = dataset_en["test"]
 
 # `generate_inputs`関数をバッチ処理に対応
 def generate_inputs(batch):
-    # conversations_list = batch["conversations"]
-    # contexts_list = batch.get("context", [""] * len(conversations_list))
+    conversations_list = batch["conversations"]
+    contexts_list = batch.get("context", [""] * len(conversations_list))
 
     contexts = []
     texts = []
-    for context, conversations in zip(batch.get("context", [""]), batch["conversations"]): # for context, conversations in zip(contexts_list, conversations_list):
+    for context, conversations in zip(contexts_list, conversations_list): # for context, conversations in zip(batch.get("context", [""]), batch["conversations"]):
         if not context:
             context = ""  # contextがNoneまたは空の場合、空文字列に設定
         text = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
