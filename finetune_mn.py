@@ -339,33 +339,6 @@ test_data_en = preprocess_and_tokenize(test_data_en, "test_data_en")
 
 print("[INFO] Text-only data preprocessing and tokenization completed.")
 
-from datasets import Features, Sequence, Value
-
-desired_features = Features({
-    'context_input_ids': Sequence(Value("int32")),
-    'context_attention_mask': Sequence(Value("int8")),
-    'input_ids': Sequence(Value("int32")),
-    'attention_mask': Sequence(Value("int8")),
-    'length': Value("int64"),
-    'text_length': Value("int64"),
-})
-
-# トークナイズ後、全てのデータセットに対してスキーマキャストを行う
-train_data_unused = train_data_unused.cast(desired_features)
-eval_data_unused = eval_data_unused.cast(desired_features)
-test_data = test_data.cast(desired_features)
-
-# ja, enのデータセットにも同様
-train_data_ja = train_data_ja.cast(desired_features)
-val_data_ja = val_data_ja.cast(desired_features)
-test_data_ja = test_data_ja.cast(desired_features)
-
-train_data_en = train_data_en.cast(desired_features)
-val_data_en = val_data_en.cast(desired_features)
-test_data_en = test_data_en.cast(desired_features)
-
-print("[INFO] Schema casting completed.")
-
 
 # データセットの統合
 train_data_used = concatenate_datasets([train_data_unused, train_data_ja, train_data_en])
