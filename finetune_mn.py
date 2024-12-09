@@ -123,12 +123,14 @@ def tokenize(batch):
     truncated_contexts = []
 
     for context in batch['context']:
-        if context is None:  # Noneチェック
+        # contextがNoneなら空文字列に
+        if context is None:
             context = ""
-        # contextを必ず文字列（空なら空文字）としてトークナイズ
+        # contextをトークナイズ
         context_tokens = tokenizer.context_tokenizer.tokenize(context)
         if len(context_tokens) > max_context_tokens:
             context_tokens = context_tokens[:max_context_tokens]
+
         truncated_contexts.append(tokenizer.context_tokenizer.convert_tokens_to_string(context_tokens))
 
     tokenized_outputs = tokenizer(
@@ -145,17 +147,33 @@ def tokenize(batch):
     tokenized_outputs['text_length'] = text_lengths
     tokenized_outputs['length'] = [len(ids) for ids in tokenized_outputs['input_ids']]
 
-    # ここが重要: context_input_ids, context_attention_mask が必ず存在かつ整数リストであることを保証する
+    # context_input_ids と context_attention_mask が常に存在し、
+    # かつ整数配列になるように強制変換する
+    num_samples = len(batch['text'])
+
     if 'context_input_ids' not in tokenized_outputs:
-        tokenized_outputs['context_input_ids'] = [[] for _ in range(len(batch['text']))]
+        # 存在しない場合は空の整数リストを割り当てる
+        tokenized_outputs['context_input_ids'] = [[] for _ in range(num_samples)]
     else:
-        # すべてint型のリストに変換（空であってもよい）
-        tokenized_outputs['context_input_ids'] = [list(map(int, ids)) for ids in tokenized_outputs['context_input_ids']]
+        # 存在する場合も整数型のリストに揃える
+        tokenized_outputs['context_input_ids'] = [
+            [int(x) for x in seq] if seq is not None else [] 
+            for seq in tokenized_outputs['context_input_ids']
+        ]
 
     if 'context_attention_mask' not in tokenized_outputs:
-        tokenized_outputs['context_attention_mask'] = [[] for _ in range(len(batch['text']))]
+        tokenized_outputs['context_attention_mask'] = [[] for _ in range(num_samples)]
     else:
-        tokenized_outputs['context_attention_mask'] = [list(map(int, mask)) for mask in tokenized_outputs['context_attention_mask']]
+        tokenized_outputs['context_attention_mask'] = [
+            [int(x) for x in seq] if seq is not None else []
+            for seq in tokenized_outputs['context_attention_mask']
+        ]
+
+    # 必要なら numpy array 化して型を明示する (任意)
+    # numpy を使わずとも上記の整数list化で多くの場合問題は解決します。
+
+    # tokenized_outputs['context_input_ids'] = [np.array(seq, dtype=np.int32) for seq in tokenized_outputs['context_input_ids']]
+    # tokenized_outputs['context_attention_mask'] = [np.array(seq, dtype=np.int8) for seq in tokenized_outputs['context_attention_mask']]
 
     return tokenized_outputs
 
