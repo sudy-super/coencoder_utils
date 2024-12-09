@@ -85,6 +85,8 @@ test_data_ja = dataset_ja["test"]
 train_data_en = dataset_en["train"]
 val_data_en = dataset_en["validation"]
 test_data_en = dataset_en["test"]
+
+print("[INFO] Datasets loaded successfully.")
 ""
 
 # `generate_inputs`関数をバッチ処理に対応
@@ -250,6 +252,7 @@ train_data = train_data.filter(lambda x: x['text_length'] <= max_text_length, nu
 val_data = val_data.filter(lambda x: x['text_length'] <= max_text_length, num_proc=8)
 test_data = test_data.filter(lambda x: x['text_length'] <= max_text_length, num_proc=8)
 
+print("[INFO] Data preprocessing and tokenization completed.")
 
 from datasets import concatenate_datasets, Dataset
 
@@ -282,6 +285,8 @@ train_data_unused = train_data.select(range(num_train_samples, len(train_data)))
 num_eval_samples = int(0.6 * len(eval_data))
 eval_data_used = eval_data.select(range(num_eval_samples))
 eval_data_unused = eval_data.select(range(num_eval_samples, len(eval_data)))
+
+print("[INFO] Data split successfully.")
 
 ""
 train_data_ja = train_data_ja.shuffle(seed=42)
@@ -322,6 +327,7 @@ train_data_en = preprocess_and_tokenize(train_data_en, "train_data_en")
 val_data_en = preprocess_and_tokenize(val_data_en, "val_data_en")
 test_data_en = preprocess_and_tokenize(test_data_en, "test_data_en")
 
+print("[INFO] Text-only data preprocessing and tokenization completed.")
 
 from datasets import Features, Sequence, Value
 
@@ -347,6 +353,8 @@ test_data_ja = test_data_ja.cast(desired_features)
 train_data_en = train_data_en.cast(desired_features)
 val_data_en = val_data_en.cast(desired_features)
 test_data_en = test_data_en.cast(desired_features)
+
+print("[INFO] Schema casting completed.")
 
 
 # データセットの統合
