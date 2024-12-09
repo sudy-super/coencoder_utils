@@ -371,41 +371,6 @@ print(f"Number of train samples: {len(train_data_used)}")
 print(f"Number of validation samples: {len(eval_data_used)}")
 print(f"Number of test samples: {len(test_data)}")
 
-# train_data_sorted = train_data_used.sort('length')
-
-
-# サンプルの長さに基づいてデータをソートし、バッチを形成するためのカスタムサンプラー
-from torch.utils.data import Sampler
-import numpy as np
-
-class GroupedLengthSampler(Sampler):
-    def __init__(self, lengths, batch_size, shuffle=True):
-        self.lengths = lengths
-        self.batch_size = batch_size
-        self.shuffle = shuffle
-
-        # インデックスと長さを取得
-        self.indices_lengths = list(enumerate(self.lengths))
-
-        # 長さに基づいてソート
-        self.indices_lengths.sort(key=lambda x: x[1], reverse=True)
-
-        # バッチを形成
-        self.batches = [self.indices_lengths[i:i + self.batch_size] for i in range(0, len(self.indices_lengths), self.batch_size)]
-
-        if self.shuffle:
-            random.seed(42)
-            random.shuffle(self.batches)
-
-        # フラットなインデックスリストを作成
-        self.indices = [idx for batch in self.batches for idx, _ in batch]
-
-    def __iter__(self):
-        return iter(self.indices)
-
-    def __len__(self):
-        return len(self.indices)
-
 
 
 """
@@ -418,6 +383,7 @@ for i in range(len(first_batch)):
     print(f"Text tokens count: {text_tokens_count}")
 """
 
+"""
 from torch.utils.data import DataLoader
 from queue import Queue
 
@@ -535,7 +501,7 @@ class CustomTrainer(Trainer):
                 self.monitor_thread.join(timeout=5)
         
         return result
-    """
+    ""
     def get_train_dataloader(self):
         if self.train_dataset is None:
             raise ValueError("Trainer: training requires a train_dataset.")
@@ -559,7 +525,9 @@ class CustomTrainer(Trainer):
             num_workers=self.args.dataloader_num_workers,
             pin_memory=self.args.dataloader_pin_memory,
         )
-    """
+    ""
+
+"""
 
 # Hugging Faceの進捗バーを強制的に有効化
 logging.set_verbosity_info()
@@ -601,7 +569,7 @@ args = TrainingArguments(
 )
 
 # Trainerの設定
-trainer = CustomTrainer(
+trainer = Trainer(
     model=model,
     args=args,
     train_dataset=train_data_used,
