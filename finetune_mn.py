@@ -43,7 +43,6 @@ model = CoEncoderForConditionalGeneration.from_pretrained(
     attn_implementation="flash_attention_2"
 )
 
-model.to("cuda")
 model.model_parallel = True
 
 tokenizer.text_tokenizer.pad_token = tokenizer.text_tokenizer.eos_token
