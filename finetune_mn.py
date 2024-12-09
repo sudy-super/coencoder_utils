@@ -118,25 +118,19 @@ Today Date: 8 Dec 2024
         texts.append(text)
     return {'context': contexts, 'text': texts}
 
-# `tokenize`関数をバッチ処理に対応
 def tokenize(batch):
-    # 最大トークン数の設定
     max_context_tokens = 131072
-
-    # 各サンプルに対してcontextのトークン数を確認し、必要に応じてカット
     truncated_contexts = []
+
     for context in batch['context']:
-        # contextを単独でトークン化してトークン数を確認
+        if context is None:  # Noneチェック
+            context = ""
+        # contextを必ず文字列（空なら空文字）としてトークナイズ
         context_tokens = tokenizer.context_tokenizer.tokenize(context)
         if len(context_tokens) > max_context_tokens:
-            # トークン数が65536を超える場合、カット
-            context = tokenizer.context_tokenizer.convert_tokens_to_string(context_tokens[:max_context_tokens])
-        truncated_contexts.append(context)
-    
-    text_tokenized = tokenizer.text_tokenizer(batch['text'], add_special_tokens=False)
-    text_lengths = [len(ids) for ids in text_tokenized['input_ids']]
+            context_tokens = context_tokens[:max_context_tokens]
+        truncated_contexts.append(tokenizer.context_tokenizer.convert_tokens_to_string(context_tokens))
 
-    # contextをカットしたリストを用いて最終的にトークン化
     tokenized_outputs = tokenizer(
         context=truncated_contexts,
         text=batch['text'],
@@ -145,10 +139,26 @@ def tokenize(batch):
         padding=False,
     )
 
-    tokenized_outputs['length'] = [len(ids) for ids in tokenized_outputs['input_ids']]
+    # text_length計算
+    text_tokenized = tokenizer.text_tokenizer(batch['text'], add_special_tokens=False)
+    text_lengths = [len(ids) for ids in text_tokenized['input_ids']]
     tokenized_outputs['text_length'] = text_lengths
+    tokenized_outputs['length'] = [len(ids) for ids in tokenized_outputs['input_ids']]
+
+    # ここが重要: context_input_ids, context_attention_mask が必ず存在かつ整数リストであることを保証する
+    if 'context_input_ids' not in tokenized_outputs:
+        tokenized_outputs['context_input_ids'] = [[] for _ in range(len(batch['text']))]
+    else:
+        # すべてint型のリストに変換（空であってもよい）
+        tokenized_outputs['context_input_ids'] = [list(map(int, ids)) for ids in tokenized_outputs['context_input_ids']]
+
+    if 'context_attention_mask' not in tokenized_outputs:
+        tokenized_outputs['context_attention_mask'] = [[] for _ in range(len(batch['text']))]
+    else:
+        tokenized_outputs['context_attention_mask'] = [list(map(int, mask)) for mask in tokenized_outputs['context_attention_mask']]
 
     return tokenized_outputs
+
 
 def data_collator(features):
     # context部分のトークンをパディング
