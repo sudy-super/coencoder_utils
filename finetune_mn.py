@@ -118,6 +118,8 @@ Today Date: 8 Dec 2024
         texts.append(text)
     return {'context': contexts, 'text': texts}
 
+
+import numpy as np
 def tokenize(batch):
     max_context_tokens = 131072
     truncated_contexts = []
@@ -172,8 +174,8 @@ def tokenize(batch):
     # 必要なら numpy array 化して型を明示する (任意)
     # numpy を使わずとも上記の整数list化で多くの場合問題は解決します。
 
-    # tokenized_outputs['context_input_ids'] = [np.array(seq, dtype=np.int32) for seq in tokenized_outputs['context_input_ids']]
-    # tokenized_outputs['context_attention_mask'] = [np.array(seq, dtype=np.int8) for seq in tokenized_outputs['context_attention_mask']]
+    tokenized_outputs['context_input_ids'] = [np.array(seq, dtype=np.int32) for seq in tokenized_outputs['context_input_ids']]
+    tokenized_outputs['context_attention_mask'] = [np.array(seq, dtype=np.int8) for seq in tokenized_outputs['context_attention_mask']]
 
     return tokenized_outputs
 
