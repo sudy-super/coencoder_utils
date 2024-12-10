@@ -611,7 +611,7 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         # Process context input through ContextTower
-        if context_input_ids is not None:
+        if context_input_ids is not None and context_input_ids.numel() > 0:
             context_features = self.context_tower(context_input_ids, context_attention_mask)
             context_features, context_attention_mask = self.connector(
                 context_features=context_features,
