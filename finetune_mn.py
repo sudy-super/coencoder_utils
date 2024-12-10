@@ -348,22 +348,29 @@ def ensure_dataset_features(dataset):
     for col in required_columns:
         if col not in dataset.column_names:
             if 'input_ids' in col:
-                # null値の代わりに空のリストを追加
-                dataset = dataset.add_column(col, [[]] * len(dataset))
+                # 空のリストを追加（整数型として）
+                dataset = dataset.add_column(col, [[0]] * len(dataset))
             elif 'attention_mask' in col:
-                # null値の代わりに0のリストを追加
+                # 0のリストを追加（整数型として）
                 dataset = dataset.add_column(col, [[0]] * len(dataset))
             elif col in ['length', 'text_length']:
-                # 長さ0のリストを追加
+                # 長さ0を追加（整数型として）
                 dataset = dataset.add_column(col, [0] * len(dataset))
     
-    # 型の強制変換
-    dataset = dataset.cast_column('context_input_ids', 
-        datasets.Sequence(datasets.Value('int64'), length=-1))
-    dataset = dataset.cast_column('context_attention_mask', 
-        datasets.Sequence(datasets.Value('int64'), length=-1))
+    # 型の強制変換（整数型を明示的に指定）
+    features = datasets.Features({
+        'context_input_ids': datasets.Sequence(datasets.Value('int64')),
+        'context_attention_mask': datasets.Sequence(datasets.Value('int64')),
+        'input_ids': datasets.Sequence(datasets.Value('int64')),
+        'attention_mask': datasets.Sequence(datasets.Value('int64')),
+        'length': datasets.Value('int64'),
+        'text_length': datasets.Value('int64')
+    })
+    
+    dataset = dataset.cast(features)
     
     return dataset
+
 
 # データセットの前処理と結合
 train_data_used = concatenate_datasets([
