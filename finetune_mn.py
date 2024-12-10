@@ -183,11 +183,11 @@ def data_collator(features):
     )
     # パディングされたバッチを統合
     batch = {
-        'context_input_ids': context_batch['input_ids'],
-        'context_attention_mask': context_batch['attention_mask'],
-        'input_ids': text_batch['input_ids'],
-        'attention_mask': text_batch['attention_mask'],
-        'labels': labels_batch['input_ids']
+        'context_input_ids': context_batch['input_ids'].long(),
+        'context_attention_mask': context_batch['attention_mask'].long(),
+        'input_ids': text_batch['input_ids'].long(),
+        'attention_mask': text_batch['attention_mask'].long(),
+        'labels': labels_batch['input_ids'].long()
     }
     return batch
 
@@ -619,7 +619,7 @@ args = TrainingArguments(
     logging_strategy="steps",
     eval_strategy="steps",
     save_strategy="steps",
-    eval_steps=104, # Phase1: 73
+    eval_steps=55, # Phase1: 73
     save_steps=1265, # Phase1: 316
     output_dir="output",
     report_to="wandb",
