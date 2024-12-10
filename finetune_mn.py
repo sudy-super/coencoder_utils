@@ -331,6 +331,7 @@ test_data_en = preprocess_and_tokenize(test_data_en, "test_data_en")
 print("[INFO] Text-only data preprocessing and tokenization completed.")
 
 from datasets import Dataset
+import datasets
 
 def ensure_dataset_features(dataset):
     # データセットが必要な特徴量を持っているか確認し、必要に応じて調整
