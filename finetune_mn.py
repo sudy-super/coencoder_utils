@@ -96,7 +96,7 @@ def generate_inputs(batch):
 
     contexts = []
     texts = []
-    for context, conversations in zip(contexts_list, conversations_list): # for context, conversations in zip(batch.get("context", [""]), batch["conversations"]):
+    for context, conversations in zip(contexts_list, conversations_list):
         if not context:
             context = ""  # contextがNoneまたは空の場合、空文字列に設定
         text = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
@@ -118,22 +118,25 @@ Today Date: 8 Dec 2024
         texts.append(text)
     return {'context': contexts, 'text': texts}
 
-
-def to_int32_lists(seq_list):
-    import numpy as np
-    return [np.array(seq if seq is not None else [], dtype=np.int32).tolist() for seq in seq_list]
-
+# `tokenize`関数をバッチ処理に対応
 def tokenize(batch):
+    # 最大トークン数の設定
     max_context_tokens = 131072
+
+    # 各サンプルに対してcontextのトークン数を確認し、必要に応じてカット
     truncated_contexts = []
     for context in batch['context']:
-        if context is None:
-            context = ""
+        # contextを単独でトークン化してトークン数を確認
         context_tokens = tokenizer.context_tokenizer.tokenize(context)
         if len(context_tokens) > max_context_tokens:
-            context_tokens = context_tokens[:max_context_tokens]
-        truncated_contexts.append(tokenizer.context_tokenizer.convert_tokens_to_string(context_tokens))
+            # トークン数が65536を超える場合、カット
+            context = tokenizer.context_tokenizer.convert_tokens_to_string(context_tokens[:max_context_tokens])
+        truncated_contexts.append(context)
+    
+    text_tokenized = tokenizer.text_tokenizer(batch['text'], add_special_tokens=False)
+    text_lengths = [len(ids) for ids in text_tokenized['input_ids']]
 
+    # contextをカットしたリストを用いて最終的にトークン化
     tokenized_outputs = tokenizer(
         context=truncated_contexts,
         text=batch['text'],
@@ -142,25 +145,10 @@ def tokenize(batch):
         padding=False,
     )
 
-    text_tokenized = tokenizer.text_tokenizer(batch['text'], add_special_tokens=False)
-    text_lengths = [len(ids) for ids in text_tokenized['input_ids']]
-    tokenized_outputs['text_length'] = text_lengths
     tokenized_outputs['length'] = [len(ids) for ids in tokenized_outputs['input_ids']]
-
-    # 必ずint32へ変換
-    if 'context_input_ids' not in tokenized_outputs:
-        tokenized_outputs['context_input_ids'] = [[] for _ in batch['text']]
-    tokenized_outputs['context_input_ids'] = to_int32_lists(tokenized_outputs['context_input_ids'])
-
-    if 'context_attention_mask' not in tokenized_outputs:
-        tokenized_outputs['context_attention_mask'] = [[] for _ in batch['text']]
-    tokenized_outputs['context_attention_mask'] = to_int32_lists(tokenized_outputs['context_attention_mask'])
-
-    tokenized_outputs['input_ids'] = to_int32_lists(tokenized_outputs['input_ids'])
-    tokenized_outputs['attention_mask'] = to_int32_lists(tokenized_outputs['attention_mask'])
+    tokenized_outputs['text_length'] = text_lengths
 
     return tokenized_outputs
-
 
 def data_collator(features):
     # context部分のトークンをパディング
@@ -208,19 +196,7 @@ train_data = train_data.shuffle(seed=42)
 val_data = val_data.shuffle(seed=42)
 test_data = test_data.shuffle(seed=42)
 
-from datasets import Dataset, Features, Sequence, Value
-
-# Featuresを明示的に指定 (スキーマ)
-final_features = Features({
-    'context_input_ids': Sequence(Value("int32")),
-    'context_attention_mask': Sequence(Value("int32")),
-    'input_ids': Sequence(Value("int32")),
-    'attention_mask': Sequence(Value("int32")),
-    'text_length': Value("int64"),
-    'length': Value("int64"),
-})
-
-# データの前処理
+# データの前処理（キャッシュファイル名を削除）
 train_data = train_data.map(
     generate_inputs,
     batched=True,
@@ -252,7 +228,6 @@ train_data = train_data.map(
     num_proc=8,
     remove_columns=train_data.column_names,
     desc="Tokenizing train data",
-    features=final_features,
     load_from_cache_file=True
 )
 val_data = val_data.map(
@@ -261,7 +236,6 @@ val_data = val_data.map(
     num_proc=8,
     remove_columns=val_data.column_names,
     desc="Tokenizing validation data",
-    features=final_features,
     load_from_cache_file=True
 )
 test_data = test_data.map(
@@ -270,7 +244,6 @@ test_data = test_data.map(
     num_proc=8,
     remove_columns=test_data.column_names,
     desc="Tokenizing test data",
-    features=final_features,
     load_from_cache_file=True
 )
 
@@ -280,6 +253,7 @@ val_data = val_data.filter(lambda x: x['text_length'] <= max_text_length, num_pr
 test_data = test_data.filter(lambda x: x['text_length'] <= max_text_length, num_proc=8)
 
 print("[INFO] Data preprocessing and tokenization completed.")
+
 
 from datasets import concatenate_datasets, Dataset
 
@@ -313,9 +287,9 @@ num_eval_samples = int(0.6 * len(eval_data))
 eval_data_used = eval_data.select(range(num_eval_samples))
 eval_data_unused = eval_data.select(range(num_eval_samples, len(eval_data)))
 
+""
 print("[INFO] Data split successfully.")
 
-""
 train_data_ja = train_data_ja.shuffle(seed=42)
 val_data_ja = val_data_ja.shuffle(seed=42)
 test_data_ja = test_data_ja.shuffle(seed=42)
@@ -340,7 +314,6 @@ def preprocess_and_tokenize(dataset, desc_prefix):
         num_proc=8,
         remove_columns=dataset.column_names,
         desc=f"Tokenizing {desc_prefix}",
-        features=final_features,
         load_from_cache_file=True
     )
 
@@ -357,11 +330,37 @@ test_data_en = preprocess_and_tokenize(test_data_en, "test_data_en")
 
 print("[INFO] Text-only data preprocessing and tokenization completed.")
 
-
 # データセットの統合
-train_data_used = concatenate_datasets([train_data_unused, train_data_ja, train_data_en])
-eval_data_used = concatenate_datasets([eval_data_unused, val_data_ja, val_data_en])
-test_data = concatenate_datasets([test_data, test_data_ja, test_data_en])
+# データセットの特徴量を揃える関数を追加
+def align_dataset_features(dataset):
+    # 特定の列のみを選択して、型を統一
+    return dataset.select_columns([
+        'context_input_ids', 
+        'context_attention_mask', 
+        'input_ids', 
+        'attention_mask', 
+        'length', 
+        'text_length'
+    ])
+
+# データセットの特徴量を揃えてから結合
+train_data_used = concatenate_datasets([
+    align_dataset_features(train_data_unused), 
+    align_dataset_features(train_data_ja), 
+    align_dataset_features(train_data_en)
+])
+
+eval_data_used = concatenate_datasets([
+    align_dataset_features(eval_data_unused), 
+    align_dataset_features(val_data_ja), 
+    align_dataset_features(val_data_en)
+])
+
+test_data = concatenate_datasets([
+    align_dataset_features(test_data), 
+    align_dataset_features(test_data_ja), 
+    align_dataset_features(test_data_en)
+])
 
 train_data_used = train_data_used.shuffle(seed=42)
 eval_data_used = eval_data_used.shuffle(seed=42)
@@ -380,6 +379,41 @@ print(f"Number of train samples: {len(train_data_used)}")
 print(f"Number of validation samples: {len(eval_data_used)}")
 print(f"Number of test samples: {len(test_data)}")
 
+# train_data_sorted = train_data_used.sort('length')
+
+
+# サンプルの長さに基づいてデータをソートし、バッチを形成するためのカスタムサンプラー
+from torch.utils.data import Sampler
+import numpy as np
+
+class GroupedLengthSampler(Sampler):
+    def __init__(self, lengths, batch_size, shuffle=True):
+        self.lengths = lengths
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+
+        # インデックスと長さを取得
+        self.indices_lengths = list(enumerate(self.lengths))
+
+        # 長さに基づいてソート
+        self.indices_lengths.sort(key=lambda x: x[1], reverse=True)
+
+        # バッチを形成
+        self.batches = [self.indices_lengths[i:i + self.batch_size] for i in range(0, len(self.indices_lengths), self.batch_size)]
+
+        if self.shuffle:
+            random.seed(42)
+            random.shuffle(self.batches)
+
+        # フラットなインデックスリストを作成
+        self.indices = [idx for batch in self.batches for idx, _ in batch]
+
+    def __iter__(self):
+        return iter(self.indices)
+
+    def __len__(self):
+        return len(self.indices)
+
 
 
 """
@@ -392,7 +426,6 @@ for i in range(len(first_batch)):
     print(f"Text tokens count: {text_tokens_count}")
 """
 
-"""
 from torch.utils.data import DataLoader
 from queue import Queue
 
@@ -510,7 +543,7 @@ class CustomTrainer(Trainer):
                 self.monitor_thread.join(timeout=5)
         
         return result
-    ""
+    """
     def get_train_dataloader(self):
         if self.train_dataset is None:
             raise ValueError("Trainer: training requires a train_dataset.")
@@ -534,9 +567,7 @@ class CustomTrainer(Trainer):
             num_workers=self.args.dataloader_num_workers,
             pin_memory=self.args.dataloader_pin_memory,
         )
-    ""
-
-"""
+    """
 
 # Hugging Faceの進捗バーを強制的に有効化
 logging.set_verbosity_info()
@@ -578,7 +609,7 @@ args = TrainingArguments(
 )
 
 # Trainerの設定
-trainer = Trainer(
+trainer = CustomTrainer(
     model=model,
     args=args,
     train_dataset=train_data_used,
