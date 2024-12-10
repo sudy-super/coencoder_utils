@@ -330,36 +330,57 @@ test_data_en = preprocess_and_tokenize(test_data_en, "test_data_en")
 
 print("[INFO] Text-only data preprocessing and tokenization completed.")
 
-# データセットの統合
-# データセットの特徴量を揃える関数を追加
-def align_dataset_features(dataset):
-    # 特定の列のみを選択して、型を統一
-    return dataset.select_columns([
+from datasets import Dataset
+
+def ensure_dataset_features(dataset):
+    # データセットが必要な特徴量を持っているか確認し、必要に応じて調整
+    required_columns = [
         'context_input_ids', 
         'context_attention_mask', 
         'input_ids', 
         'attention_mask', 
         'length', 
         'text_length'
-    ])
+    ]
+    
+    # 不足している列があれば追加
+    for col in required_columns:
+        if col not in dataset.column_names:
+            if 'input_ids' in col:
+                # null値の代わりに空のリストを追加
+                dataset = dataset.add_column(col, [[]] * len(dataset))
+            elif 'attention_mask' in col:
+                # null値の代わりに0のリストを追加
+                dataset = dataset.add_column(col, [[0]] * len(dataset))
+            elif col in ['length', 'text_length']:
+                # 長さ0のリストを追加
+                dataset = dataset.add_column(col, [0] * len(dataset))
+    
+    # 型の強制変換
+    dataset = dataset.cast_column('context_input_ids', 
+        datasets.Sequence(datasets.Value('int64'), length=-1))
+    dataset = dataset.cast_column('context_attention_mask', 
+        datasets.Sequence(datasets.Value('int64'), length=-1))
+    
+    return dataset
 
-# データセットの特徴量を揃えてから結合
+# データセットの前処理と結合
 train_data_used = concatenate_datasets([
-    align_dataset_features(train_data_unused), 
-    align_dataset_features(train_data_ja), 
-    align_dataset_features(train_data_en)
+    ensure_dataset_features(train_data_unused), 
+    ensure_dataset_features(train_data_ja), 
+    ensure_dataset_features(train_data_en)
 ])
 
 eval_data_used = concatenate_datasets([
-    align_dataset_features(eval_data_unused), 
-    align_dataset_features(val_data_ja), 
-    align_dataset_features(val_data_en)
+    ensure_dataset_features(eval_data_unused), 
+    ensure_dataset_features(val_data_ja), 
+    ensure_dataset_features(val_data_en)
 ])
 
 test_data = concatenate_datasets([
-    align_dataset_features(test_data), 
-    align_dataset_features(test_data_ja), 
-    align_dataset_features(test_data_en)
+    ensure_dataset_features(test_data), 
+    ensure_dataset_features(test_data_ja), 
+    ensure_dataset_features(test_data_en)
 ])
 
 train_data_used = train_data_used.shuffle(seed=42)
