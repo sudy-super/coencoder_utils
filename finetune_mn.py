@@ -257,7 +257,7 @@ train_data = train_data.map(
     num_proc=8,
     remove_columns=train_data.column_names,
     desc="Tokenizing train data",
-    features=final_features
+    features=final_features,
     load_from_cache_file=True
 )
 val_data = val_data.map(
@@ -266,7 +266,7 @@ val_data = val_data.map(
     num_proc=8,
     remove_columns=val_data.column_names,
     desc="Tokenizing validation data",
-    features=final_features
+    features=final_features,
     load_from_cache_file=True
 )
 test_data = test_data.map(
@@ -275,7 +275,7 @@ test_data = test_data.map(
     num_proc=8,
     remove_columns=test_data.column_names,
     desc="Tokenizing test data",
-    features=final_features
+    features=final_features,
     load_from_cache_file=True
 )
 
@@ -345,7 +345,7 @@ def preprocess_and_tokenize(dataset, desc_prefix):
         num_proc=8,
         remove_columns=dataset.column_names,
         desc=f"Tokenizing {desc_prefix}",
-        features=final_features
+        features=final_features,
         load_from_cache_file=True
     )
 
