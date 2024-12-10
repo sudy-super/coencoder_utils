@@ -119,9 +119,8 @@ Today Date: 8 Dec 2024
     return {'context': contexts, 'text': texts}
 
 
-import numpy as np
-
 def tokenize(batch):
+    import numpy as np
     max_context_tokens = 131072
     truncated_contexts = []
     for context in batch['context']:
@@ -130,7 +129,8 @@ def tokenize(batch):
         context_tokens = tokenizer.context_tokenizer.tokenize(context)
         if len(context_tokens) > max_context_tokens:
             context_tokens = context_tokens[:max_context_tokens]
-        truncated_contexts.append(tokenizer.context_tokenizer.convert_tokens_to_string(context_tokens))
+        truncated_str = tokenizer.context_tokenizer.convert_tokens_to_string(context_tokens)
+        truncated_contexts.append(truncated_str)
 
     tokenized_outputs = tokenizer(
         context=truncated_contexts,
@@ -145,15 +145,24 @@ def tokenize(batch):
     tokenized_outputs['text_length'] = text_lengths
     tokenized_outputs['length'] = [len(ids) for ids in tokenized_outputs['input_ids']]
 
-    # ここで全てのID列をint32に統一
-    def to_int32_lists(seq_list):
-        return [np.array(seq, dtype=np.int32).tolist() if seq is not None else [] for seq in seq_list]
+    # 全てint32, int8で統一
+    def to_int32(seq_list):
+        # seq_listがNoneや空なら空リスト
+        return [list(map(int, seq)) if seq is not None else [] for seq in seq_list]
 
-    for key in ['input_ids', 'attention_mask', 'context_input_ids', 'context_attention_mask']:
-        if key not in tokenized_outputs:
-            tokenized_outputs[key] = [[] for _ in range(len(batch['text']))]
-        else:
-            tokenized_outputs[key] = to_int32_lists(tokenized_outputs[key])
+    # 存在しない場合は空のリストを割り当て
+    if 'context_input_ids' not in tokenized_outputs:
+        tokenized_outputs['context_input_ids'] = [[] for _ in range(len(batch['text']))]
+    else:
+        tokenized_outputs['context_input_ids'] = to_int32(tokenized_outputs['context_input_ids'])
+
+    if 'context_attention_mask' not in tokenized_outputs:
+        tokenized_outputs['context_attention_mask'] = [[] for _ in range(len(batch['text']))]
+    else:
+        tokenized_outputs['context_attention_mask'] = to_int32(tokenized_outputs['context_attention_mask'])
+
+    tokenized_outputs['input_ids'] = to_int32(tokenized_outputs['input_ids'])
+    tokenized_outputs['attention_mask'] = to_int32(tokenized_outputs['attention_mask'])
 
     return tokenized_outputs
 
@@ -204,7 +213,19 @@ train_data = train_data.shuffle(seed=42)
 val_data = val_data.shuffle(seed=42)
 test_data = test_data.shuffle(seed=42)
 
-# データの前処理（キャッシュファイル名を削除）
+from datasets import Dataset, Features, Sequence, Value
+
+# Featuresを明示的に指定 (スキーマ)
+final_features = Features({
+    'context_input_ids': Sequence(Value("int32")),
+    'context_attention_mask': Sequence(Value("int8")),
+    'input_ids': Sequence(Value("int32")),
+    'attention_mask': Sequence(Value("int8")),
+    'text_length': Value("int64"),
+    'length': Value("int64"),
+})
+
+# データの前処理
 train_data = train_data.map(
     generate_inputs,
     batched=True,
@@ -236,6 +257,7 @@ train_data = train_data.map(
     num_proc=8,
     remove_columns=train_data.column_names,
     desc="Tokenizing train data",
+    features=final_features
     load_from_cache_file=True
 )
 val_data = val_data.map(
@@ -244,6 +266,7 @@ val_data = val_data.map(
     num_proc=8,
     remove_columns=val_data.column_names,
     desc="Tokenizing validation data",
+    features=final_features
     load_from_cache_file=True
 )
 test_data = test_data.map(
@@ -252,6 +275,7 @@ test_data = test_data.map(
     num_proc=8,
     remove_columns=test_data.column_names,
     desc="Tokenizing test data",
+    features=final_features
     load_from_cache_file=True
 )
 
@@ -321,6 +345,7 @@ def preprocess_and_tokenize(dataset, desc_prefix):
         num_proc=8,
         remove_columns=dataset.column_names,
         desc=f"Tokenizing {desc_prefix}",
+        features=final_features
         load_from_cache_file=True
     )
 
