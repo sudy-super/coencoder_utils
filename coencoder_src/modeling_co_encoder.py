@@ -378,12 +378,12 @@ class CoEncoderContextTower(nn.Module):
         self,
         input_ids,
         inputs_embeds,
-        context_attention_mask
+        attention_mask
     ):
         outputs = self.tower(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
-            attention_mask=context_attention_mask
+            attention_mask=attention_mask
         )
         
         features = self.feature_select(outputs)
