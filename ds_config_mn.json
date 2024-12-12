@@ -5,8 +5,11 @@
     "bf16": {
         "enabled": true
     },
+    "communication_options": {
+        "timeout": 7200.0
+    },
     "zero_optimization": {
-        "stage": 3,
+        "stage": 2,
         "offload_param": {
             "device": "cpu",
             "pin_memory": true
@@ -17,7 +20,7 @@
         },
         "overlap_comm": true,
         "contiguous_gradients": true,
-        "reduce_bucket_size": "auto",
+        "reduce_bucket_size": 5e8,
         "stage3_prefetch_bucket_size": 5e8,
         "stage3_param_persistence_threshold": 1e6,
         "allgather_partitions": true,
