@@ -433,43 +433,43 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
         return self.language_model.get_input_embeddings()
 
     def get_context_input_embeddings(self):
-        return self.context_tower.get_input_embeddings()
+        return self.context_tower.tower.get_input_embeddings()
     
     def set_input_embeddings(self, value):
         self.language_model.set_input_embeddings(value)
 
     def set_context_input_embeddings(self, value):
-        self.context_tower.set_input_embeddings(value)
+        self.context_tower.tower.set_input_embeddings(value)
 
     def get_output_embeddings(self):
         return self.language_model.get_output_embeddings()
     
     def get_context_output_embeddings(self):
-        return self.context_tower.get_output_embeddings()
+        return self.context_tower.tower.get_output_embeddings()
     
     def set_output_embeddings(self, new_embeddings):
         self.language_model.set_output_embeddings(new_embeddings)
 
     def set_context_output_embeddings(self, new_embeddings):
-        self.context_tower.set_output_embeddings(new_embeddings)
+        self.context_tower.tower.set_output_embeddings(new_embeddings)
     
     def set_decoder(self, decoder):
         self.language_model.set_decoder(decoder)
 
     def set_context_encoder(self, decoder):
-        self.context_tower.set_decoder(decoder)
+        self.context_tower.tower.set_decoder(decoder)
     
     def get_decoder(self):
         return self.language_model.get_decoder()
 
     def get_context_encoder(self):
-        return self.context_tower.get_decoder()
+        return self.context_tower.tower.get_decoder()
     
     def tie_weights(self):
         return self.language_model.tie_weights()
     
     def context_tie_weights(self):
-        return self.context_tower.tie_weights()
+        return self.context_tower.tower.tie_weights()
     
     def resize_token_embeddings(self, new_num_tokens: Optional[int] = None, pad_to_multiple_of=None) -> nn.Embedding:
         model_embeds = self.language_model.resize_token_embeddings(new_num_tokens, pad_to_multiple_of)
