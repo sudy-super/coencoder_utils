@@ -107,8 +107,9 @@ class CoEncoderDynamicAttention(nn.Module):
 
     def forward(
         self,
-        hidden_states,
-        output_attentions=False,
+        hidden_states: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        output_attentions: bool = False,
     ):
         # Get input dimensions
         bsz, seq_len, hidden_size = hidden_states.size()
@@ -129,6 +130,10 @@ class CoEncoderDynamicAttention(nn.Module):
 
         # Compute attention scores
         attn_weights = torch.matmul(query_states, key_states.transpose(2, 3)) / math.sqrt(self.head_dim)
+
+        if attention_mask is not None:  # no matter the length, we just slice it
+            causal_mask = attention_mask[:, :, :, : key_states.shape[-2]]
+            attn_weights = attn_weights + causal_mask
 
         # Apply softmax to get attention probabilities
         attn_weights = nn.functional.softmax(attn_weights, dim=-1)
@@ -158,8 +163,9 @@ class CoEncoderDynamicFlashAttention2(CoEncoderDynamicAttention):
 
     def forward(
         self,
-        hidden_states,
-        output_attentions=False,
+        hidden_states: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        output_attentions: bool = False,
     ):
         output_attentions = False
 
@@ -198,8 +204,9 @@ class CoEncoderDynamicFlashAttention2(CoEncoderDynamicAttention):
             key_states = key_states.to(target_dtype)
             value_states = value_states.to(target_dtype)
 
-        # Define attention_mask (assuming all positions are valid)
-        attention_mask = None  # Since we have no padding tokens or specific masking
+        # Define attention_mask assuming all positions are valid
+        # because flash_attn does not support custom attention_mask
+        attention_mask = None
 
         # Define other required variables
         position_ids = None
