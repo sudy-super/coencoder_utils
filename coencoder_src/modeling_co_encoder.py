@@ -300,6 +300,7 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
             output_size = dynamic_output_sizes[batch_idx].item()
             item_input = hidden_states[batch_idx]  # Shape: (seq_len, hidden_size)
             item_weights = attention_weights[batch_idx]  # Shape: (seq_len)
+            print(f"コンテキストのシーケンス長: {item_weights.item()}\nプーリング後のシーケンス長: {output_size}")
 
             # Perform weighted pooling
             pooled_values = []
