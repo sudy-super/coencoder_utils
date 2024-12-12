@@ -646,6 +646,7 @@ trainer = CustomTrainer(
     data_collator=data_collator,
 )
 
+print("[INFO] Trainer initialized successfully.")
 # トレーニング開始
 trainer.train()
 
