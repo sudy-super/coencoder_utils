@@ -490,14 +490,17 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
     
     def _merge_context_features(
         self,
-        context_features,
-        inputs_embeds,
-        input_ids,
-        attention_mask,
+        context_features = None,
+        inputs_embeds = None,
+        input_ids = None,
+        attention_mask = None,
         position_ids=None,
         labels=None,
         context_attention_mask=None,
     ):
+        if context_features is None:
+            return inputs_embeds, attention_mask, position_ids, labels
+
         batch_size, seq_length, embed_dim = inputs_embeds.shape
         context_seq_len = context_features.size(1)
         
@@ -572,7 +575,7 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
         
         # Create new position_ids
         total_seq_len = new_inputs_embeds.size(1)
-        new_position_ids = torch.arange(total_seq_len, device=input_ids.device).unsqueeze(0).expand(batch_size, -1)
+        new_position_ids = torch.arange(total_seq_len, device=inputs_embeds.device).unsqueeze(0).expand(batch_size, -1)
         
         # Update labels if provided
         if labels is not None:
@@ -667,39 +670,29 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
             raise ValueError("You must provide either non-empty input_ids/inputs_embeds or context_input_ids/context_inputs_embeds")
 
 
-        if context_input_ids is not None or context_inputs_embeds is not None:
-            if (
-                (context_input_ids is not None and context_input_ids.size(1) == 0) or
-                (context_inputs_embeds is not None and context_inputs_embeds.size(1) == 0)
-            ):
-                context_features = None
-                context_attention_mask = None
-            else:
-                context_features = self.context_tower(
-                    input_ids=context_input_ids,
-                    inputs_embeds=context_inputs_embeds,
-                    attention_mask=context_attention_mask
-                )
-                context_features, context_attention_mask = self.connector(
-                    context_features=context_features
-                )
-
+        if (context_input_ids is not None and context_input_ids.size(1) > 0) or \
+            (context_inputs_embeds is not None and context_inputs_embeds.size(1) > 0):
+            context_features = self.context_tower(
+                input_ids=context_input_ids,
+                inputs_embeds=context_inputs_embeds,
+                attention_mask=context_attention_mask,
+            )
+            context_features, context_attention_mask = self.connector(
+                context_features=context_features
+            )
         else:
             context_features = None
             context_attention_mask = None
 
 
         if inputs_embeds is None and input_ids is not None:
-            if input_ids.size(1) == 0:
-                inputs_embeds = None
-            else:
+            if input_ids.size(1) > 0:
                 inputs_embeds = self.get_input_embeddings()(input_ids)
+            else:
+                inputs_embeds = None
         
 
-        if inputs_embeds is None:
-            inputs_embeds = context_features
-            attention_mask = context_attention_mask
-        elif context_features is not None:
+        if inputs_embeds is not None:
             inputs_embeds, attention_mask, position_ids, labels = self._merge_context_features(
                 context_features,
                 inputs_embeds,
@@ -709,6 +702,9 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
                 labels,
                 context_attention_mask=context_attention_mask,
             )
+        else:
+            inputs_embeds = context_features
+            attention_mask = context_attention_mask
 
         outputs = self.language_model(
             attention_mask=attention_mask,
