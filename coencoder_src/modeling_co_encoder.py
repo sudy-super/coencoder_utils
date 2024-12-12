@@ -380,16 +380,11 @@ class CoEncoderContextTower(nn.Module):
         inputs_embeds,
         context_attention_mask
     ):
-        if inputs_embeds is not None:
-            outputs = self.tower(
-                inputs_embeds=inputs_embeds,
-                attention_mask=context_attention_mask
-            )
-        elif input_ids is not None:
-            outputs = self.tower(
-                input_ids=input_ids,
-                attention_mask=context_attention_mask
-            )
+        outputs = self.tower(
+            input_ids=input_ids,
+            inputs_embeds=inputs_embeds,
+            attention_mask=context_attention_mask
+        )
         
         features = self.feature_select(outputs)
         return features
@@ -669,31 +664,23 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
             raise ValueError("You must provide either non-empty input_ids/inputs_embeds or context_input_ids/context_inputs_embeds")
 
 
-        if context_inputs_embeds is not None:
-            if context_inputs_embeds.size(1) == 0:
+        if context_input_ids is not None or context_inputs_embeds is not None:
+            if (
+                (context_input_ids is not None and context_input_ids.size(1) == 0) or
+                (context_inputs_embeds is not None and context_inputs_embeds.size(1) == 0)
+            ):
                 context_features = None
                 context_attention_mask = None
             else:
                 context_features = self.context_tower(
+                    input_ids=context_input_ids,
                     inputs_embeds=context_inputs_embeds,
                     attention_mask=context_attention_mask
                 )
                 context_features, context_attention_mask = self.connector(
                     context_features=context_features
                 )
-        elif context_input_ids is not None:
-            if context_input_ids.size(1) == 0:
-                context_features = None
-                context_attention_mask = None
-            else:
-                context_embeds = self.get_context_input_embeddings()(context_input_ids)
-                context_features = self.context_tower(
-                    inputs_embeds=context_embeds,
-                    attention_mask=context_attention_mask
-                )
-                context_features, context_attention_mask = self.connector(
-                    context_features=context_features
-                )
+
         else:
             context_features = None
             context_attention_mask = None
