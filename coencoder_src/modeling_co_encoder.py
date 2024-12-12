@@ -374,11 +374,23 @@ class CoEncoderContextTower(nn.Module):
         hidden_states = llm_outputs.hidden_states
         return hidden_states[self.select_layer]
 
-    def forward(self, inputs, context_attention_mask):
-        outputs = self.tower(input_ids=inputs,
-                             attention_mask=context_attention_mask,
-                             output_hidden_states=True
-        )
+    def forward(
+        self,
+        input_ids,
+        inputs_embeds,
+        context_attention_mask
+    ):
+        if inputs_embeds is not None:
+            outputs = self.tower(
+                inputs_embeds=inputs_embeds,
+                attention_mask=context_attention_mask
+            )
+        elif input_ids is not None:
+            outputs = self.tower(
+                input_ids=input_ids,
+                attention_mask=context_attention_mask
+            )
+        
         features = self.feature_select(outputs)
         return features
     
