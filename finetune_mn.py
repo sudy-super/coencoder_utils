@@ -631,9 +631,10 @@ args = TrainingArguments(
     deepspeed="ds_config_mn.json",  # DeepSpeed設定ファイルの指定
     gradient_checkpointing=True,
     optim="adamw_torch_fused",
-    dataloader_pin_memory=True,
-    dataloader_num_workers=4,
+    dataloader_pin_memory=False,
+    dataloader_num_workers=2,
     local_rank=int(os.environ.get("LOCAL_RANK", -1)),
+    ddp_timeout=7200,
     # group_by_length=True,
 )
 
