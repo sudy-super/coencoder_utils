@@ -424,24 +424,45 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
     
     def get_input_embeddings(self):
         return self.language_model.get_input_embeddings()
+
+    def get_context_input_embeddings(self):
+        return self.context_tower.get_input_embeddings()
     
     def set_input_embeddings(self, value):
         self.language_model.set_input_embeddings(value)
 
+    def set_context_input_embeddings(self, value):
+        self.context_tower.set_input_embeddings(value)
+
     def get_output_embeddings(self):
         return self.language_model.get_output_embeddings()
     
+    def get_context_output_embeddings(self):
+        return self.context_tower.get_output_embeddings()
+    
     def set_output_embeddings(self, new_embeddings):
         self.language_model.set_output_embeddings(new_embeddings)
+
+    def set_context_output_embeddings(self, new_embeddings):
+        self.context_tower.set_output_embeddings(new_embeddings)
     
     def set_decoder(self, decoder):
         self.language_model.set_decoder(decoder)
+
+    def set_context_encoder(self, decoder):
+        self.context_tower.set_decoder(decoder)
     
     def get_decoder(self):
         return self.language_model.get_decoder()
+
+    def get_context_encoder(self):
+        return self.context_tower.get_decoder()
     
     def tie_weights(self):
         return self.language_model.tie_weights()
+    
+    def context_tie_weights(self):
+        return self.context_tower.tie_weights()
     
     def resize_token_embeddings(self, new_num_tokens: Optional[int] = None, pad_to_multiple_of=None) -> nn.Embedding:
         model_embeds = self.language_model.resize_token_embeddings(new_num_tokens, pad_to_multiple_of)
@@ -550,13 +571,14 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
     @replace_return_docstrings(output_type=CoEncoderCausalLMOutputWithPast, config_class=_CONFIG_FOR_DOC)
     def forward(
         self,
-        input_ids: torch.LongTensor = None,
         context_input_ids: torch.LongTensor = None,
+        context_inputs_embeds: Optional[torch.FloatTensor] = None,
         context_attention_mask: Optional[torch.Tensor] = None,
+        input_ids: torch.LongTensor = None,
+        inputs_embeds: Optional[torch.FloatTensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.LongTensor] = None,
         past_key_values: Optional[List[torch.FloatTensor]] = None,
-        inputs_embeds: Optional[torch.FloatTensor] = None,
         labels: Optional[torch.LongTensor] = None,
         use_cache: Optional[bool] = None,
         output_attentions: Optional[bool] = None,
@@ -567,18 +589,22 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
         Perform a forward pass through the CoEncoder model, optionally conditioning on context input.
 
         Args:
-            input_ids (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
-                Token IDs of the input sequence.
             context_input_ids (`torch.LongTensor` of shape `(batch_size, context_sequence_length)`, *optional*):
                 Token IDs of the context input sequence.
+            context_inputs_embeds (`torch.FloatTensor` of shape `(batch_size, context_sequence_length, hidden_size)`, *optional*):
+                Pre-computed context embeddings. If provided, will not compute embeddings from context_input_ids.
+            context_attention_mask (`torch.Tensor` of shape `(batch_size, context_sequence_length)`, *optional*):
+                Attention mask for context input sequence.
+            input_ids (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
+                Token IDs of the input sequence.
+            inputs_embeds (`torch.FloatTensor` of shape `(batch_size, sequence_length, hidden_size)`, *optional*):
+                Optionally, instead of passing `input_ids`, you can pass an embedded representation directly.
             attention_mask (`torch.Tensor` of shape `(batch_size, sequence_length)`, *optional*):
                 Mask to avoid performing attention on padding token indices.
             position_ids (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
                 Indices of positions of each input sequence token.
             past_key_values (`List[torch.FloatTensor]`, *optional*):
                 Pre-computed hidden-states (key and value tensors) that can be used to speed up sequential decoding.
-            inputs_embeds (`torch.FloatTensor` of shape `(batch_size, sequence_length, hidden_size)`, *optional*):
-                Optionally, instead of passing `input_ids`, you can pass an embedded representation directly.
             labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
                 Labels for computing the language modeling loss.
             use_cache (`bool`, *optional*):
@@ -592,6 +618,13 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
 
         Returns:
             `Union[Tuple, CoEncoderCausalLMOutputWithPast]`: A tuple containing various model outputs or a `CoEncoderCausalLMOutputWithPast` instance.
+                The CoEncoderCausalLMOutputWithPast contains the following fields:
+                    - loss (`torch.FloatTensor`, *optional*): Language modeling loss if labels provided, None otherwise.
+                    - logits (`torch.FloatTensor` of shape `(batch_size, sequence_length, vocab_size)`): Prediction scores.
+                    - past_key_values (`List[torch.FloatTensor]`, *optional*): Pre-computed hidden states for efficient decoding.
+                    - hidden_states (`Tuple[torch.FloatTensor]`, *optional*): Layer hidden states if output_hidden_states=True.
+                    - attentions (`Tuple[torch.FloatTensor]`, *optional*): Layer attention weights if output_attentions=True.
+                    - context_hidden_states (`torch.FloatTensor`, *optional*): Final hidden states from the context tower.
         """
 
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
@@ -600,20 +633,64 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
         )
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        # Process context input through ContextTower
-        if context_input_ids is not None:
-            context_features = self.context_tower(context_input_ids, context_attention_mask)
-            context_features, context_attention_mask = self.connector(
-                context_features=context_features
-            )
+
+        all_inputs_none = (
+            input_ids is None and 
+            inputs_embeds is None and 
+            context_input_ids is None and 
+            context_inputs_embeds is None
+        )
+        all_inputs_empty = (
+            (input_ids is not None and input_ids.size(1) == 0) and
+            (inputs_embeds is None) and
+            (context_input_ids is not None and context_input_ids.size(1) == 0) and
+            (context_inputs_embeds is None)
+        )
+        if all_inputs_none or all_inputs_empty:
+            raise ValueError("You must provide either non-empty input_ids/inputs_embeds or context_input_ids/context_inputs_embeds")
+
+
+        if context_inputs_embeds is not None:
+            if context_inputs_embeds.size(1) == 0:
+                context_features = None
+                context_attention_mask = None
+            else:
+                context_features = self.context_tower(
+                    inputs_embeds=context_inputs_embeds,
+                    attention_mask=context_attention_mask
+                )
+                context_features, context_attention_mask = self.connector(
+                    context_features=context_features
+                )
+        elif context_input_ids is not None:
+            if context_input_ids.size(1) == 0:
+                context_features = None
+                context_attention_mask = None
+            else:
+                context_embeds = self.get_context_input_embeddings()(context_input_ids)
+                context_features = self.context_tower(
+                    inputs_embeds=context_embeds,
+                    attention_mask=context_attention_mask
+                )
+                context_features, context_attention_mask = self.connector(
+                    context_features=context_features
+                )
         else:
             context_features = None
             context_attention_mask = None
 
-        if inputs_embeds is None:
-            inputs_embeds = self.get_input_embeddings()(input_ids)
 
-        if context_features is not None:
+        if inputs_embeds is None and input_ids is not None:
+            if input_ids.size(1) == 0:
+                inputs_embeds = None
+            else:
+                inputs_embeds = self.get_input_embeddings()(input_ids)
+        
+
+        if inputs_embeds is None:
+            inputs_embeds = context_features
+            attention_mask = context_attention_mask
+        elif context_features is not None:
             inputs_embeds, attention_mask, position_ids, labels = self._merge_context_features(
                 context_features,
                 inputs_embeds,
