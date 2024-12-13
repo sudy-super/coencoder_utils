@@ -492,11 +492,10 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
         self,
         context_features = None,
         inputs_embeds = None,
-        input_ids = None,
         attention_mask = None,
+        context_attention_mask=None,
         position_ids=None,
         labels=None,
-        context_attention_mask=None,
     ):
         if context_features is None:
             return inputs_embeds, attention_mask, position_ids, labels
@@ -660,18 +659,12 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
             context_input_ids is None and 
             context_inputs_embeds is None
         )
-        all_inputs_empty = (
-            (input_ids is not None and input_ids.size(1) == 0) and
-            (inputs_embeds is None) and
-            (context_input_ids is not None and context_input_ids.size(1) == 0) and
-            (context_inputs_embeds is None)
-        )
-        if all_inputs_none or all_inputs_empty:
+        
+        if all_inputs_none:
             raise ValueError("You must provide either non-empty input_ids/inputs_embeds or context_input_ids/context_inputs_embeds")
 
 
-        if (context_input_ids is not None and context_input_ids.size(1) > 0) or \
-            (context_inputs_embeds is not None and context_inputs_embeds.size(1) > 0):
+        if context_input_ids is not None or context_inputs_embeds is not None:
             context_features = self.context_tower(
                 input_ids=context_input_ids,
                 inputs_embeds=context_inputs_embeds,
@@ -686,21 +679,16 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
 
 
         if inputs_embeds is None and input_ids is not None:
-            if input_ids.size(1) > 0:
-                inputs_embeds = self.get_input_embeddings()(input_ids)
-            else:
-                inputs_embeds = None
-        
+            inputs_embeds = self.get_input_embeddings()(input_ids)
 
         if inputs_embeds is not None:
             inputs_embeds, attention_mask, position_ids, labels = self._merge_context_features(
-                context_features,
-                inputs_embeds,
-                input_ids,
-                attention_mask,
-                position_ids,
-                labels,
+                context_features=context_features,
+                inputs_embeds=inputs_embeds,
+                attention_mask=attention_mask,
                 context_attention_mask=context_attention_mask,
+                position_ids=position_ids,
+                labels=labels,
             )
         else:
             inputs_embeds = context_features
