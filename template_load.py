@@ -11,6 +11,7 @@ messages = [
 
 print(tokenizer.apply_chat_template(messages, tokenize=False))
 eos_num = tokenizer(tokenizer.eos_token)["input_ids"]
+print(eos_num)
 print(tokenizer.decode(eos_num))
 # test_num = tokenizer("<|begin_of_text|>test", add_special_tokens=False)["input_ids"]
 # print(tokenizer.decode(test_num))

@@ -59,6 +59,8 @@ model.model_parallel = True
 
 tokenizer.text_tokenizer.pad_token = tokenizer.text_tokenizer.eos_token
 tokenizer.context_tokenizer.pad_token = tokenizer.context_tokenizer.eos_token
+tokenizer.text_tokenizer.pad_token_id = tokenizer.text_tokenizer.eos_token_id
+tokenizer.context_tokenizer.pad_token_id = tokenizer.context_tokenizer.eos_token_id
 
 
 model.gradient_checkpointing_enable()

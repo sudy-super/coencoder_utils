@@ -436,6 +436,7 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
         self.ignore_index = config.ignore_index if hasattr(config, 'ignore_index') else -100
         self.begin_of_context_token_id = config.begin_of_context_token_id
         self.end_of_context_token_id = config.end_of_context_token_id
+        self.context_eos_token_id = config.context_config.eos_token_id
         
         self.post_init()
     
@@ -663,8 +664,12 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
         if all_inputs_none:
             raise ValueError("You must provide either non-empty input_ids/inputs_embeds or context_input_ids/context_inputs_embeds.")
 
+        skip_context = False
+        if context_input_ids is not None:
+            if torch.all(context_input_ids == self.context_eos_token_id):
+                skip_context = True
 
-        if context_input_ids is not None or context_inputs_embeds is not None:
+        if not skip_context and (context_input_ids is not None or context_inputs_embeds is not None):
             context_features = self.context_tower(
                 input_ids=context_input_ids,
                 inputs_embeds=context_inputs_embeds,
