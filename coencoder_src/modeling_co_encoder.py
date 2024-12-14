@@ -661,7 +661,7 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
         )
         
         if all_inputs_none:
-            raise ValueError("You must provide either non-empty input_ids/inputs_embeds or context_input_ids/context_inputs_embeds")
+            raise ValueError("You must provide either non-empty input_ids/inputs_embeds or context_input_ids/context_inputs_embeds.")
 
 
         if context_input_ids is not None or context_inputs_embeds is not None:

@@ -23,16 +23,28 @@ from datetime import datetime
 
 import torch.distributed as dist
 
+phase = 1
+
 # DeepSpeedがtorch.distributedの初期化を行うため、その後でランクを取得します
 dist.init_process_group(backend='nccl')  # 必要に応じてバックエンドを指定
 
 # グローバルランク0のプロセスのみでWandBを初期化
 if dist.get_rank() == 0:
-    wandb.init(project="coencoder_finetune_mn", name="2e-5_coencoder_llm", entity="sudy_super")
+    if phase == 1:
+        wandb.init(project="coencoder_finetune_mn", name="1e-3_coencoder_connector", entity="sudy_super")
+    elif phase == 2:
+        wandb.init(project="coencoder_finetune_mn", name="2e-5_coencoder_llm", entity="sudy_super")
+    else:
+        raise ValueError("Invalid phase value. Must be 1 or 2.")
 
 torch.manual_seed(42)
 
-model_name = "sudy-super/coencoder_test2_phase1" # "sudy-super/coencoder_test2"
+if phase == 1:
+    model_name = "sudy-super/coencoder_test2"
+elif phase == 2:
+    model_name = ""
+else:
+    raise ValueError("Invalid phase value. Must be 1 or 2.")
 
 # CoEncoderトークナイザーとモデルの読み込み
 tokenizer = CoEncoderDualTokenizer.from_pretrained("co_model", trust_remote_code=True)
@@ -46,6 +58,7 @@ model = CoEncoderForConditionalGeneration.from_pretrained(
 model.model_parallel = True
 
 tokenizer.text_tokenizer.pad_token = tokenizer.text_tokenizer.eos_token
+tokenizer.context_tokenizer.pad_token = tokenizer.context_tokenizer.eos_token
 
 
 model.gradient_checkpointing_enable()
@@ -58,7 +71,12 @@ for param in model.connector.parameters():
     param.requires_grad = True
 
 for param in model.language_model.parameters():
-    param.requires_grad = True
+    if phase == 1:
+        param.requires_grad = False
+    elif phase == 2:
+        param.requires_grad = True
+    else:
+        raise ValueError("Invalid phase value. Must be 1 or 2.")
 
 for name, param in model.connector.named_parameters():
     if param.requires_grad:
@@ -73,21 +91,21 @@ train_data = dataset["train"]
 val_data = dataset["validation"]
 test_data = dataset["test"]
 
-""
-dataset_ja = load_dataset("sudy-super/coencoder_oasst2_ja")
-dataset_en = load_dataset("sudy-super/coencoder_oasst2_en")
+if phase == 2:
+    dataset_ja = load_dataset("sudy-super/coencoder_oasst2_ja")
+    dataset_en = load_dataset("sudy-super/coencoder_oasst2_en")
 
-# 各データセットのスプリットを取得
-train_data_ja = dataset_ja["train"]
-val_data_ja = dataset_ja["validation"]
-test_data_ja = dataset_ja["test"]
+    # 各データセットのスプリットを取得
+    train_data_ja = dataset_ja["train"]
+    val_data_ja = dataset_ja["validation"]
+    test_data_ja = dataset_ja["test"]
 
-train_data_en = dataset_en["train"]
-val_data_en = dataset_en["validation"]
-test_data_en = dataset_en["test"]
+    train_data_en = dataset_en["train"]
+    val_data_en = dataset_en["validation"]
+    test_data_en = dataset_en["test"]
 
-print("[INFO] Datasets loaded successfully.")
-""
+    print("[INFO] Datasets loaded successfully.")
+
 
 # `generate_inputs`関数をバッチ処理に対応
 def generate_inputs(batch):
@@ -96,13 +114,13 @@ def generate_inputs(batch):
 
     contexts = []
     texts = []
-    for context, conversations in zip(contexts_list, conversations_list):
+    for context, conversations in zip(contexts_list, conversations_list): # for context, conversations in zip(batch.get("context", [""]), batch["conversations"]):
         if not context:
-            context = ""  # contextがNoneまたは空の場合、空文字列に設定
+            context = tokenizer.context_tokenizer.pad_token # ""  # contextがNoneまたは空の場合、空文字列に設定
         text = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 
 Cutting Knowledge Date: December 2023
-Today Date: 8 Dec 2024
+Today Date: 14 Dec 2024
 
 <|eot_id|>"""
         for c in conversations:
@@ -127,7 +145,7 @@ def tokenize(batch):
     truncated_contexts = []
     for context in batch['context']:
         # contextを単独でトークン化してトークン数を確認
-        context_tokens = tokenizer.context_tokenizer.tokenize(context)
+        context_tokens = tokenizer.context_tokenizer.tokenize(context, add_special_tokens=False,)
         if len(context_tokens) > max_context_tokens:
             # トークン数が65536を超える場合、カット
             context = tokenizer.context_tokenizer.convert_tokens_to_string(context_tokens[:max_context_tokens])
@@ -143,6 +161,7 @@ def tokenize(batch):
         truncation=True,
         max_length=max_context_tokens,
         padding=False,
+        add_special_tokens=False,
     )
 
     tokenized_outputs['length'] = [len(ids) for ids in tokenized_outputs['input_ids']]
@@ -150,107 +169,37 @@ def tokenize(batch):
 
     return tokenized_outputs
 
-def data_collator(features):
-    # context部分のトークンをパディング
-    context_features = [{
-        'input_ids': f['context_input_ids'],
-        'attention_mask': f.get('context_attention_mask', [1] * len(f['context_input_ids']))
-    } for f in features]
-    context_batch = tokenizer.context_tokenizer.pad(
-        context_features,
-        padding=True,
-        max_length=None,
-        return_tensors="pt"
-    )
-    # text部分のトークンをパディング
-    text_features = [{
-        'input_ids': f['input_ids'],
-        'attention_mask': f['attention_mask']
-    } for f in features]
-    text_batch = tokenizer.text_tokenizer.pad(
-        text_features,
-        padding=True,
-        max_length=None,
-        return_tensors="pt"
-    )
-    # ラベルのパディング（input_idsと同じ）
-    label_features = [{'input_ids': f['input_ids']} for f in features]
-    labels_batch = tokenizer.text_tokenizer.pad(
-        label_features,
-        padding=True,
-        max_length=None,
-        return_tensors="pt"
-    )
-    # パディングされたバッチを統合
-    batch = {
-        'context_input_ids': context_batch['input_ids'].long(),
-        'context_attention_mask': context_batch['attention_mask'].long(),
-        'input_ids': text_batch['input_ids'].long(),
-        'attention_mask': text_batch['attention_mask'].long(),
-        'labels': labels_batch['input_ids'].long()
-    }
-    return batch
-
 # データのシャッフルとフィルタリング、バッチ処理対応
 train_data = train_data.shuffle(seed=42)
 val_data = val_data.shuffle(seed=42)
 test_data = test_data.shuffle(seed=42)
 
-# データの前処理（キャッシュファイル名を削除）
-train_data = train_data.map(
-    generate_inputs,
-    batched=True,
-    num_proc=8,
-    desc="Generating inputs for train data",
-    load_from_cache_file=True
-).filter(lambda x: x['text'] != '', num_proc=8).filter(lambda x: x['context'] != '', num_proc=8)
-
-val_data = val_data.map(
-    generate_inputs,
-    batched=True,
-    num_proc=8,
-    desc="Generating inputs for validation data",
-    load_from_cache_file=True
-).filter(lambda x: x['text'] != '', num_proc=8).filter(lambda x: x['context'] != '', num_proc=8)
-
-test_data = test_data.map(
-    generate_inputs,
-    batched=True,
-    num_proc=8,
-    desc="Generating inputs for test data",
-    load_from_cache_file=True
-).filter(lambda x: x['text'] != '', num_proc=8).filter(lambda x: x['context'] != '', num_proc=8)
-
-# データのトークン化（キャッシュファイル名を削除）
-train_data = train_data.map(
-    tokenize,
-    batched=True,
-    num_proc=8,
-    remove_columns=train_data.column_names,
-    desc="Tokenizing train data",
-    load_from_cache_file=True
-)
-val_data = val_data.map(
-    tokenize,
-    batched=True,
-    num_proc=8,
-    remove_columns=val_data.column_names,
-    desc="Tokenizing validation data",
-    load_from_cache_file=True
-)
-test_data = test_data.map(
-    tokenize,
-    batched=True,
-    num_proc=8,
-    remove_columns=test_data.column_names,
-    desc="Tokenizing test data",
-    load_from_cache_file=True
-)
-
 max_text_length = 1024
-train_data = train_data.filter(lambda x: x['text_length'] <= max_text_length, num_proc=8)
-val_data = val_data.filter(lambda x: x['text_length'] <= max_text_length, num_proc=8)
-test_data = test_data.filter(lambda x: x['text_length'] <= max_text_length, num_proc=8)
+
+def preprocess_and_tokenize_with_context(dataset, desc_prefix):
+    dataset = dataset.map(
+        generate_inputs,
+        batched=True,
+        num_proc=8,
+        desc=f"Generating inputs for {desc_prefix}",
+        load_from_cache_file=True
+    ).filter(lambda x: x['text'] != '', num_proc=8).filter(lambda x: x['context'] != '', num_proc=8).filter(lambda x: x['context'] != tokenizer.context_tokenizer.pad_token, num_proc=8)
+
+    dataset = dataset.map(
+        tokenize,
+        batched=True,
+        num_proc=8,
+        remove_columns=dataset.column_names,
+        desc=f"Tokenizing {desc_prefix}",
+        load_from_cache_file=True
+    )
+
+    dataset = dataset.filter(lambda x: x['text_length'] <= max_text_length, num_proc=8)
+    return dataset
+
+train_data = preprocess_and_tokenize_with_context(train_data, "train_data")
+val_data = preprocess_and_tokenize_with_context(val_data, "val_data")
+test_data = preprocess_and_tokenize_with_context(test_data, "test_data")
 
 print("[INFO] Data preprocessing and tokenization completed.")
 
@@ -290,13 +239,14 @@ eval_data_unused = eval_data.select(range(num_eval_samples, len(eval_data)))
 ""
 print("[INFO] Data split successfully.")
 
-train_data_ja = train_data_ja.shuffle(seed=42)
-val_data_ja = val_data_ja.shuffle(seed=42)
-test_data_ja = test_data_ja.shuffle(seed=42)
+if phase == 2:
+    train_data_ja = train_data_ja.shuffle(seed=42)
+    val_data_ja = val_data_ja.shuffle(seed=42)
+    test_data_ja = test_data_ja.shuffle(seed=42)
 
-train_data_en = train_data_en.shuffle(seed=42)
-val_data_en = val_data_en.shuffle(seed=42)
-test_data_en = test_data_en.shuffle(seed=42)
+    train_data_en = train_data_en.shuffle(seed=42)
+    val_data_en = val_data_en.shuffle(seed=42)
+    test_data_en = test_data_en.shuffle(seed=42)
 
 # 前処理とトークン化を新しいデータセットにも適用
 def preprocess_and_tokenize(dataset, desc_prefix):
@@ -320,16 +270,18 @@ def preprocess_and_tokenize(dataset, desc_prefix):
     dataset = dataset.filter(lambda x: x['text_length'] <= max_text_length, num_proc=8)
     return dataset
 
-train_data_ja = preprocess_and_tokenize(train_data_ja, "train_data_ja")
-val_data_ja = preprocess_and_tokenize(val_data_ja, "val_data_ja")
-test_data_ja = preprocess_and_tokenize(test_data_ja, "test_data_ja")
+if phase == 2:
+    train_data_ja = preprocess_and_tokenize(train_data_ja, "train_data_ja")
+    val_data_ja = preprocess_and_tokenize(val_data_ja, "val_data_ja")
+    test_data_ja = preprocess_and_tokenize(test_data_ja, "test_data_ja")
 
-train_data_en = preprocess_and_tokenize(train_data_en, "train_data_en")
-val_data_en = preprocess_and_tokenize(val_data_en, "val_data_en")
-test_data_en = preprocess_and_tokenize(test_data_en, "test_data_en")
+    train_data_en = preprocess_and_tokenize(train_data_en, "train_data_en")
+    val_data_en = preprocess_and_tokenize(val_data_en, "val_data_en")
+    test_data_en = preprocess_and_tokenize(test_data_en, "test_data_en")
 
-print("[INFO] Text-only data preprocessing and tokenization completed.")
+    print("[INFO] Text-only data preprocessing and tokenization completed.")
 
+"""
 from datasets import Dataset
 import datasets
 
@@ -370,38 +322,38 @@ def ensure_dataset_features(dataset):
     dataset = dataset.cast(features)
     
     return dataset
+"""
 
+if phase == 2:
+    # データセットの前処理と結合
+    train_data_used = concatenate_datasets([
+        train_data_unused,
+        train_data_ja,
+        train_data_en
+    ])
 
-# データセットの前処理と結合
-train_data_used = concatenate_datasets([
-    ensure_dataset_features(train_data_unused), 
-    ensure_dataset_features(train_data_ja), 
-    ensure_dataset_features(train_data_en)
-])
+    eval_data_used = concatenate_datasets([
+        eval_data_unused,
+        val_data_ja, 
+        val_data_en
+    ])
 
-eval_data_used = concatenate_datasets([
-    ensure_dataset_features(eval_data_unused), 
-    ensure_dataset_features(val_data_ja), 
-    ensure_dataset_features(val_data_en)
-])
+    test_data = concatenate_datasets([
+        test_data,
+        test_data_ja, 
+        test_data_en
+    ])
 
-test_data = concatenate_datasets([
-    ensure_dataset_features(test_data), 
-    ensure_dataset_features(test_data_ja), 
-    ensure_dataset_features(test_data_en)
-])
+    train_data_used = train_data_used.shuffle(seed=42)
+    eval_data_used = eval_data_used.shuffle(seed=42)
+    test_data = test_data.shuffle(seed=42)
 
-train_data_used = train_data_used.shuffle(seed=42)
-eval_data_used = eval_data_used.shuffle(seed=42)
-test_data = test_data.shuffle(seed=42)
-""
-
-print(f"Number of train samples(unused): {len(train_data_unused)}")
-print(f"Number of validation samples(unused): {len(eval_data_unused)}")
-print(f"Number of train samples(ja): {len(train_data_ja)}")
-print(f"Number of validation samples(ja): {len(val_data_ja)}")
-print(f"Number of train samples(en): {len(train_data_en)}")
-print(f"Number of validation samples(en): {len(val_data_en)}")
+    print(f"Number of train samples(unused): {len(train_data_unused)}")
+    print(f"Number of validation samples(unused): {len(eval_data_unused)}")
+    print(f"Number of train samples(ja): {len(train_data_ja)}")
+    print(f"Number of validation samples(ja): {len(val_data_ja)}")
+    print(f"Number of train samples(en): {len(train_data_en)}")
+    print(f"Number of validation samples(en): {len(val_data_en)}")
 
 # データセットの件数をカウントして表示
 print(f"Number of train samples: {len(train_data_used)}")
@@ -409,6 +361,48 @@ print(f"Number of validation samples: {len(eval_data_used)}")
 print(f"Number of test samples: {len(test_data)}")
 
 # train_data_sorted = train_data_used.sort('length')
+
+
+def data_collator(features):
+    # context部分のトークンをパディング
+    context_features = [{
+        'input_ids': f['context_input_ids'],
+        'attention_mask': f.get('context_attention_mask', [1] * len(f['context_input_ids']))
+    } for f in features]
+    context_batch = tokenizer.context_tokenizer.pad(
+        context_features,
+        padding=True,
+        max_length=None,
+        return_tensors="pt"
+    )
+    # text部分のトークンをパディング
+    text_features = [{
+        'input_ids': f['input_ids'],
+        'attention_mask': f['attention_mask']
+    } for f in features]
+    text_batch = tokenizer.text_tokenizer.pad(
+        text_features,
+        padding=True,
+        max_length=None,
+        return_tensors="pt"
+    )
+    # ラベルのパディング（input_idsと同じ）
+    label_features = [{'input_ids': f['input_ids']} for f in features]
+    labels_batch = tokenizer.text_tokenizer.pad(
+        label_features,
+        padding=True,
+        max_length=None,
+        return_tensors="pt"
+    )
+    # パディングされたバッチを統合
+    batch = {
+        'context_input_ids': context_batch['input_ids'],
+        'context_attention_mask': context_batch['attention_mask'],
+        'input_ids': text_batch['input_ids'],
+        'attention_mask': text_batch['attention_mask'],
+        'labels': labels_batch['input_ids']
+    }
+    return batch
 
 
 # サンプルの長さに基づいてデータをソートし、バッチを形成するためのカスタムサンプラー
@@ -607,8 +601,8 @@ args = TrainingArguments(
     num_train_epochs=1,
     per_device_train_batch_size=1,
     per_device_eval_batch_size=1,
-    gradient_accumulation_steps=1,
-    learning_rate=2e-5,
+    gradient_accumulation_steps=1 if phase==2 else 2, # Phase1: 2, Phase2: 1
+    learning_rate=2e-5 if phase==2 else 1e-3, # Phase1: 1e-3, Phase2: 2e-5
     adam_beta2=0.95,
     weight_decay=0.0,
     lr_scheduler_type="cosine",
@@ -619,8 +613,8 @@ args = TrainingArguments(
     logging_strategy="steps",
     eval_strategy="steps",
     save_strategy="steps",
-    eval_steps=73, # Phase1: 73
-    save_steps=2506, # Phase1: 316
+    eval_steps=73, # Phase1: 73, Phase2: 73
+    save_steps=2506 if phase==2 else 949, # Phase1: 949, Phase2: 2506
     output_dir="output",
     report_to="wandb",
     save_total_limit=3,
