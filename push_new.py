@@ -12,7 +12,7 @@ CoEncoderDualTokenizer.register_for_auto_class("AutoTokenizer")
 
 tokenizer = AutoTokenizer.from_pretrained("./co_model", trust_remote_code=True)
 
-model = AutoModelForCausalLM.from_pretrained("./co_model", torch_dtype=torch.bfloat16, trust_remote_code=True)
+model = AutoModelForCausalLM.from_pretrained("./co_output_model", torch_dtype=torch.bfloat16, trust_remote_code=True)
 
 """
 # カスタムトークナイザを作成

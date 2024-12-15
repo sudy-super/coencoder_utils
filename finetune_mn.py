@@ -80,7 +80,7 @@ for param in model.language_model.parameters():
     else:
         raise ValueError("Invalid phase value. Must be 1 or 2.")
 
-for name, param in model.connector.named_parameters():
+for name, param in model.named_parameters():
     if param.requires_grad:
         print(f"training param - {name}: {param.shape}")
 
