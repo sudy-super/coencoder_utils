@@ -376,7 +376,7 @@ class CoEncoderContextLanguageConnector(nn.Module):
         # context_features: [batch_size, seq_len, hidden_size]
         # Apply dynamic adaptive average pooling with attention
         pooled_output, attention_mask, dynamic_output_sizes = self.dynamic_pooling(
-            hidden_states=context_features
+            hidden_states=context_features,
             only_padding=only_padding
         )
         # pooled_output: [batch_size, max_pooled_len, hidden_size]
