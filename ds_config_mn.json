@@ -9,7 +9,7 @@
         "timeout": 7200.0
     },
     "zero_optimization": {
-        "stage": 2,
+        "stage": 3,
         "offload_param": {
             "device": "cpu",
             "pin_memory": true
