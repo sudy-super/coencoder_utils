@@ -123,7 +123,7 @@ def generate_inputs(batch):
         text = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 
 Cutting Knowledge Date: December 2023
-Today Date: 14 Dec 2024
+Today Date: 15 Dec 2024
 
 <|eot_id|>"""
         for c in conversations:
@@ -614,7 +614,7 @@ args = TrainingArguments(
     num_train_epochs=1,
     per_device_train_batch_size=1,
     per_device_eval_batch_size=1,
-    gradient_accumulation_steps=1 if phase==2 else 2, # Phase1: 2, Phase2: 1
+    gradient_accumulation_steps=2 if phase==2 else 2, # Phase1: 2, Phase2: 1
     learning_rate=2e-5 if phase==2 else 1e-3, # Phase1: 1e-3, Phase2: 2e-5
     adam_beta2=0.95,
     weight_decay=0.0,
@@ -627,7 +627,7 @@ args = TrainingArguments(
     eval_strategy="steps",
     save_strategy="steps",
     eval_steps=73, # Phase1: 73, Phase2: 73
-    save_steps=2506 if phase==2 else 949, # Phase1: 949, Phase2: 2506
+    save_steps=1253 if phase==2 else 949, # Phase1: 949, Phase2: 2506
     output_dir="output",
     report_to="wandb",
     save_total_limit=3,
