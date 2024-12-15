@@ -666,7 +666,7 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
             if torch.all(context_input_ids == self.config.context_config.eos_token_id):
                 skip_context = True
 
-        if not skip_context (context_input_ids is not None or context_inputs_embeds is not None):
+        if not skip_context and (context_input_ids is not None or context_inputs_embeds is not None):
             context_features = self.context_tower(
                 input_ids=context_input_ids,
                 inputs_embeds=context_inputs_embeds,
