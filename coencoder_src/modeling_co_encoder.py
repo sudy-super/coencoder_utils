@@ -282,7 +282,8 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
                 (batch_size,), dummy_size,
                 dtype=torch.long, device=device
             )
-            return dummy_output, dummy_mask, dummy_sizes
+            # return dummy_output, dummy_mask, dummy_sizes
+            return None, None, None
 
         # Estimate output size using attention mechanism
         # attn_output_size: (batch_size, seq_len, 1)
@@ -379,6 +380,8 @@ class CoEncoderContextLanguageConnector(nn.Module):
             only_padding=only_padding
         )
         # pooled_output: [batch_size, max_pooled_len, hidden_size]
+        if pooled_output is None:
+            return None, None
 
         hidden_states = self.linear_1(pooled_output)
         hidden_states = self.act(hidden_states)
