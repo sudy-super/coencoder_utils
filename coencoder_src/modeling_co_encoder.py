@@ -346,6 +346,9 @@ class CoEncoderContextLanguageConnector(nn.Module):
         )
 
     def forward(self, context_features):
+        if context_features is None:
+            return None, None
+        
         # context_features: [batch_size, seq_len, hidden_size]
         # Apply dynamic adaptive average pooling with attention
         pooled_output, attention_mask, dynamic_output_sizes = self.dynamic_pooling(
@@ -380,6 +383,21 @@ class CoEncoderContextTower(nn.Module):
         inputs_embeds,
         attention_mask
     ):
+        if input_ids is not None:
+            is_all_pad = (input_ids == self.pad_token_id).all(dim=-1)
+            
+            has_valid_input = (~is_all_pad).any()
+            
+            if not has_valid_input:
+                return None
+            
+        elif inputs_embeds is not None and attention_mask is not None:
+            is_all_pad = (attention_mask == 0).all(dim=-1)
+            has_valid_input = (~is_all_pad).any()
+            
+            if not has_valid_input:
+                return None
+        
         outputs = self.tower(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
@@ -661,12 +679,8 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
         if all_inputs_none:
             raise ValueError("You must provide either non-empty input_ids/inputs_embeds or context_input_ids/context_inputs_embeds.")
 
-        skip_context = False
-        if context_input_ids is not None:
-            if torch.all(context_input_ids == self.config.context_config.eos_token_id):
-                skip_context = True
 
-        if not skip_context and (context_input_ids is not None or context_inputs_embeds is not None):
+        if context_input_ids is not None or context_inputs_embeds is not None:
             context_features = self.context_tower(
                 input_ids=context_input_ids,
                 inputs_embeds=context_inputs_embeds,
