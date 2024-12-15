@@ -664,12 +664,8 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
         if all_inputs_none:
             raise ValueError("You must provide either non-empty input_ids/inputs_embeds or context_input_ids/context_inputs_embeds.")
 
-        skip_context = False
-        if context_input_ids is not None:
-            if torch.all(context_input_ids == self.context_eos_token_id):
-                skip_context = True
 
-        if not skip_context and (context_input_ids is not None or context_inputs_embeds is not None):
+        if context_input_ids is not None or context_inputs_embeds is not None:
             context_features = self.context_tower(
                 input_ids=context_input_ids,
                 inputs_embeds=context_inputs_embeds,
