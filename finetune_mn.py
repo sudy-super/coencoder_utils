@@ -42,7 +42,7 @@ torch.manual_seed(42)
 if phase == 1:
     model_name = "sudy-super/coencoder_test2"
 elif phase == 2:
-    model_name = "coencoder_test2_phase1_2"
+    model_name = "sudy-super/coencoder_test2_phase1_2"
 else:
     raise ValueError("Invalid phase value. Must be 1 or 2.")
 
