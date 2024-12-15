@@ -10,9 +10,9 @@ CoEncoderConfig.register_for_auto_class("AutoConfig")
 CoEncoderForConditionalGeneration.register_for_auto_class("AutoModelForCausalLM")
 CoEncoderDualTokenizer.register_for_auto_class("AutoTokenizer")
 
-tokenizer = AutoTokenizer.from_pretrained("./co_model", trust_remote_code=True)
+tokenizer = CoEncoderDualTokenizer.from_pretrained("./co_model", trust_remote_code=True)
 
-model = AutoModelForCausalLM.from_pretrained("./co_output_model", torch_dtype=torch.bfloat16, trust_remote_code=True)
+model = CoEncoderForConditionalGeneration.from_pretrained("./co_output_model", torch_dtype=torch.bfloat16, trust_remote_code=True)
 
 """
 # カスタムトークナイザを作成
