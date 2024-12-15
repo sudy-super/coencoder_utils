@@ -377,17 +377,13 @@ def data_collator(features):
         max_length=None,
         return_tensors="pt"
     )
-
-    # パッド トークンのみで構成されているかチェック
-    pad_token_id = tokenizer.context_tokenizer.pad_token_id
-    is_all_pad = (context_batch['input_ids'] == pad_token_id).all(dim=-1)
     
-    # attention_maskを浮動小数点型として明示的に作成
-    attention_mask = context_batch['attention_mask'].to(dtype=torch.float32)
-    # is_all_padがTrueの行のattention_maskを0に設定
-    attention_mask[is_all_pad] = 0.0
-    # 整数型に戻す
-    context_batch['attention_mask'] = attention_mask.to(dtype=torch.long)
+    # If context_input_ids is pad-only, set attention_mask to 0
+    pad_token_id = tokenizer.context_tokenizer.pad_token_id
+    for i in range(context_batch["input_ids"].size(0)):
+        # 全てpad_token_idならattention_maskを0に
+        if torch.all(context_batch["input_ids"][i] == pad_token_id):
+            context_batch["attention_mask"][i] = 0
 
     # text部分のトークンをパディング
     text_features = [{
@@ -400,12 +396,7 @@ def data_collator(features):
         max_length=None,
         return_tensors="pt"
     )
-    
-    # text部分のattention_maskも同様に処理
-    text_attention_mask = text_batch['attention_mask'].to(dtype=torch.float32)
-    text_batch['attention_mask'] = text_attention_mask.to(dtype=torch.long)
 
-    # ラベルのパディング（input_idsと同じ）
     label_features = [{'input_ids': f['input_ids']} for f in features]
     labels_batch = tokenizer.text_tokenizer.pad(
         label_features,
@@ -413,8 +404,7 @@ def data_collator(features):
         max_length=None,
         return_tensors="pt"
     )
-    
-    # パディングされたバッチを統合
+
     batch = {
         'context_input_ids': context_batch['input_ids'],
         'context_attention_mask': context_batch['attention_mask'],
