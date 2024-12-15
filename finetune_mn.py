@@ -47,7 +47,7 @@ else:
     raise ValueError("Invalid phase value. Must be 1 or 2.")
 
 # CoEncoderトークナイザーとモデルの読み込み
-tokenizer = CoEncoderDualTokenizer.from_pretrained("co_model", trust_remote_code=True)
+tokenizer = CoEncoderDualTokenizer.from_pretrained("./co_model", trust_remote_code=True)
 model = CoEncoderForConditionalGeneration.from_pretrained(
     model_name,
     torch_dtype=torch.bfloat16,
