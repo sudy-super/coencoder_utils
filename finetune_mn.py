@@ -385,7 +385,7 @@ def data_collator(features):
     pad_token_id = tokenizer.context_tokenizer.pad_token_id
     is_all_padding = (context_batch['input_ids'] == pad_token_id).all(dim=1)
     # all paddingの場合、attention_maskを0に設定
-    context_batch['attention_mask'][is_all_padding] = 1
+    context_batch['attention_mask'][is_all_padding] = 0
     
     # text部分のトークンをパディング
     text_features = [{
