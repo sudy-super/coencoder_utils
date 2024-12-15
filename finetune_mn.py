@@ -381,8 +381,13 @@ def data_collator(features):
     # パッド トークンのみで構成されているかチェック
     pad_token_id = tokenizer.context_tokenizer.pad_token_id
     is_all_pad = (context_batch['input_ids'] == pad_token_id).all(dim=-1)
-    # 全てパッドトークンの場合、attention_maskを0に設定
-    context_batch['attention_mask'][is_all_pad] = 0
+    
+    # attention_maskを適切な型で作成
+    # オリジナルのattention_maskと同じデバイスとdtypeを使用
+    attention_mask = context_batch['attention_mask'].clone()
+    # is_all_padがTrueの行のattention_maskを0に設定
+    attention_mask[is_all_pad] = attention_mask[is_all_pad].new_zeros(attention_mask[is_all_pad].shape)
+    context_batch['attention_mask'] = attention_mask
 
     # text部分のトークンをパディング
     text_features = [{
