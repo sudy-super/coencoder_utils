@@ -47,7 +47,7 @@ if token is None:
     token = HfFolder.get_token()
 
 # レポジトリ名とユーザー名を設定
-repo_name = "coencoder_test3"
+repo_name = "coencoder_test2_phase1_2"
 username = api.whoami(token)['name']
 full_repo_name = f"{username}/{repo_name}"
 

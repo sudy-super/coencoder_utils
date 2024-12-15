@@ -23,7 +23,7 @@ from datetime import datetime
 
 import torch.distributed as dist
 
-phase = 1
+phase = 2
 
 # DeepSpeedがtorch.distributedの初期化を行うため、その後でランクを取得します
 dist.init_process_group(backend='nccl')  # 必要に応じてバックエンドを指定
@@ -42,7 +42,7 @@ torch.manual_seed(42)
 if phase == 1:
     model_name = "sudy-super/coencoder_test2"
 elif phase == 2:
-    model_name = ""
+    model_name = "coencoder_test2_phase1_2"
 else:
     raise ValueError("Invalid phase value. Must be 1 or 2.")
 
