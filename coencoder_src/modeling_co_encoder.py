@@ -527,6 +527,14 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
         labels=None,
     ):
         if context_features is None:
+            if position_ids is None and inputs_embeds is not None:
+                batch_size, seq_length = inputs_embeds.shape[:2]
+                position_ids = torch.arange(
+                    seq_length, 
+                    device=inputs_embeds.device, 
+                    dtype=torch.long
+                ).unsqueeze(0).expand(batch_size, -1)
+        
             return inputs_embeds, attention_mask, position_ids, labels
 
         batch_size, seq_length, embed_dim = inputs_embeds.shape
