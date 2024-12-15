@@ -74,7 +74,7 @@ for param in model.connector.parameters():
 
 for param in model.language_model.parameters():
     if phase == 1:
-        param.requires_grad = False
+        param.requires_grad = True
     elif phase == 2:
         param.requires_grad = True
     else:
