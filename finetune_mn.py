@@ -377,6 +377,13 @@ def data_collator(features):
         max_length=None,
         return_tensors="pt"
     )
+
+    # パッド トークンのみで構成されているかチェック
+    pad_token_id = tokenizer.context_tokenizer.pad_token_id
+    is_all_pad = (context_batch['input_ids'] == pad_token_id).all(dim=-1)
+    # 全てパッドトークンの場合、attention_maskを0に設定
+    context_batch['attention_mask'][is_all_pad] = 0
+
     # text部分のトークンをパディング
     text_features = [{
         'input_ids': f['input_ids'],
