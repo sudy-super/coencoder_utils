@@ -23,7 +23,7 @@ tokenizer = CoEncoderDualTokenizer(
 """
 
 # 2. モデルとトークナイザを保存
-model_dir = "coencoder_test3"
+model_dir = "coencoder_test2_phase1_2"
 os.makedirs(model_dir, exist_ok=True)
 
 # モデルを保存
