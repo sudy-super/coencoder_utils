@@ -80,11 +80,6 @@ for param in model.language_model.parameters():
     else:
         raise ValueError("Invalid phase value. Must be 1 or 2.")
 
-for name, param in model.named_parameters():
-    if param.dtype == torch.long:
-        print(f"Found integer parameter: {name}, dtype: {param.dtype}")
-        # bfloat16などモデルに合わせた浮動小数点型へキャスト
-        param.data = param.data.to(torch.bfloat16)
 
 for name, param in model.named_parameters():
     if param.requires_grad:
