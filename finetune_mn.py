@@ -377,14 +377,6 @@ def data_collator(features):
         max_length=None,
         return_tensors="pt"
     )
-    
-    # If context_input_ids is pad-only, set attention_mask to 0
-    pad_token_id = tokenizer.context_tokenizer.pad_token_id
-    for i in range(context_batch["input_ids"].size(0)):
-        # 全てpad_token_idならattention_maskを0に
-        if torch.all(context_batch["input_ids"][i] == pad_token_id):
-            context_batch["attention_mask"][i] = 0
-
     # text部分のトークンをパディング
     text_features = [{
         'input_ids': f['input_ids'],
@@ -396,7 +388,7 @@ def data_collator(features):
         max_length=None,
         return_tensors="pt"
     )
-
+    # ラベルのパディング（input_idsと同じ）
     label_features = [{'input_ids': f['input_ids']} for f in features]
     labels_batch = tokenizer.text_tokenizer.pad(
         label_features,
@@ -404,7 +396,7 @@ def data_collator(features):
         max_length=None,
         return_tensors="pt"
     )
-
+    # パディングされたバッチを統合
     batch = {
         'context_input_ids': context_batch['input_ids'],
         'context_attention_mask': context_batch['attention_mask'],
