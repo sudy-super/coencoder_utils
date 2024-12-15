@@ -436,7 +436,6 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
         self.ignore_index = config.ignore_index if hasattr(config, 'ignore_index') else -100
         self.begin_of_context_token_id = config.begin_of_context_token_id
         self.end_of_context_token_id = config.end_of_context_token_id
-        self.context_eos_token_id = config.context_config.eos_token_id
         
         self.post_init()
     
