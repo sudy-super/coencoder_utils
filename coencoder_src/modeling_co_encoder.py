@@ -372,6 +372,7 @@ class CoEncoderContextTower(nn.Module):
             attn_implementation="flash_attention_2" if is_flash_attn_2_available() else "eager"
         )
         self.select_layer = config.context_feature_layer
+        self.pad_token_id = config.context_config.eos_token_id
     
     def feature_select(self, llm_outputs):
         hidden_states = llm_outputs.hidden_states
