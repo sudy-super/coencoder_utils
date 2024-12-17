@@ -373,20 +373,12 @@ def data_collator(features):
         'input_ids': f['context_input_ids'],
         'attention_mask': f.get('context_attention_mask', [1] * len(f['context_input_ids']))
     } for f in features]
-    
     context_batch = tokenizer.context_tokenizer.pad(
         context_features,
         padding=True,
         max_length=None,
         return_tensors="pt"
     )
-    
-    # padトークンのみで構成されているかチェック
-    pad_token_id = tokenizer.context_tokenizer.pad_token_id
-    is_all_padding = (context_batch['input_ids'] == pad_token_id).all(dim=1)
-    # all paddingの場合、attention_maskを0に設定
-    context_batch['attention_mask'][is_all_padding] = 0
-    
     # text部分のトークンをパディング
     text_features = [{
         'input_ids': f['input_ids'],
@@ -398,7 +390,6 @@ def data_collator(features):
         max_length=None,
         return_tensors="pt"
     )
-    
     # ラベルのパディング（input_idsと同じ）
     label_features = [{'input_ids': f['input_ids']} for f in features]
     labels_batch = tokenizer.text_tokenizer.pad(
@@ -407,7 +398,6 @@ def data_collator(features):
         max_length=None,
         return_tensors="pt"
     )
-    
     # パディングされたバッチを統合
     batch = {
         'context_input_ids': context_batch['input_ids'],
