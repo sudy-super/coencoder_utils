@@ -23,7 +23,7 @@ from datetime import datetime
 
 import torch.distributed as dist
 
-phase = 2
+phase = 1
 
 # DeepSpeedがtorch.distributedの初期化を行うため、その後でランクを取得します
 dist.init_process_group(backend='nccl')  # 必要に応じてバックエンドを指定
@@ -613,9 +613,9 @@ logging.enable_progress_bar()
 # トレーニング引数の設定
 args = TrainingArguments(
     num_train_epochs=1,
-    per_device_train_batch_size=1,
-    per_device_eval_batch_size=1,
-    gradient_accumulation_steps=1 if phase==2 else 2, # Phase1: 2, Phase2: 1
+    per_device_train_batch_size=2 if phase==2 else 4,
+    per_device_eval_batch_size=2 if phase==2 else 4,
+    gradient_accumulation_steps=1 if phase==2 else 1, # Phase1: 2, Phase2: 1
     learning_rate=2e-5 if phase==2 else 1e-3, # Phase1: 1e-3, Phase2: 2e-5
     # label_smoothing_factor=0.1 if phase==2 else 0.0,
     adam_beta2=0.95,

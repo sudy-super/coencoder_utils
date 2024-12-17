@@ -9,7 +9,7 @@
         "timeout": 7200.0
     },
     "zero_optimization": {
-        "stage": 3,
+        "stage": 2,
         "offload_param": {
             "device": "cpu",
             "pin_memory": true
@@ -30,7 +30,7 @@
     "optimizer": {
         "type": "AdamW",
         "params": {
-            "lr": 2e-5,
+            "lr": 1e-3,
             "betas": [0.9, 0.95],
             "eps": 1e-8,
             "weight_decay": 0.0
@@ -52,10 +52,10 @@
         "size": 8
     },
     "pipeline": {
-        "pipeline_model_parallel_size": 4,
+        "pipeline_model_parallel_size": 2,
         "activation_checkpoint_interval": 1,
         "prescale_gradients": true,
-        "stages": 4
+        "stages": 2
     },
     "data_parallel_size": 1,
     "activation_checkpointing": {
