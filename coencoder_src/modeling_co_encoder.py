@@ -267,22 +267,25 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
         device = hidden_states.device
 
         # Check if all inputs are padding (no valid tokens)
-        input_sum = hidden_states.abs().sum(dim=(1, 2))
-        all_padding_mask = input_sum == 0
+        if context_attention_mask is not None:
+            valid_tokens_per_sample = context_attention_mask.sum(dim=1)  # (batch_size,)
+            all_padding_mask = (valid_tokens_per_sample == 0)
+        else:
+            input_sum = hidden_states.abs().sum(dim=(1, 2))
+            all_padding_mask = (input_sum == 0)
 
         if all_padding_mask.all():
-            # 全てパディングの場合はダミーの出力を返す
-            # ダミーのpooled_output: 全て0, (batch_size, output_size_min, hidden_size)
+            # pooled_output of dummy: all 0, (batch_size, output_size_min, hidden_size)
             pooled_output = torch.zeros(
                 batch_size, self.output_size_min, hidden_size, 
                 device=device, dtype=hidden_states.dtype
             )
-            # attention_mask: 全て0 (False), (batch_size, output_size_min)
+            # attention_mask: all 0 (False), (batch_size, output_size_min)
             attention_mask = torch.zeros(
                 batch_size, self.output_size_min, 
                 dtype=torch.bool, device=device
             )
-            # dynamic_output_sizes: 全てoutput_size_min
+            # dynamic_output_sizes: all output_size_min
             dynamic_output_sizes = torch.full(
                 (batch_size,),
                 self.output_size_min,
