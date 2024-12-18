@@ -735,14 +735,11 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
             return_dict=return_dict,
         )
 
-        logits = outputs.logits
+        logits = outputs[0]
 
         loss = None
         if labels is not None:
-            shift_logits = logits[..., :-1, :].contiguous()
-            shift_labels = labels[..., 1:].contiguous()
-            loss_fct = nn.CrossEntropyLoss(ignore_index=self.ignore_index)
-            loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+            loss = self.loss_function(logits=logits, labels=labels, vocab_size=self.config.vocab_size)
 
         if not return_dict:
             output = (logits,) + outputs[1:]
