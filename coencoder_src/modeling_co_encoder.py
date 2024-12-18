@@ -632,6 +632,7 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
+        num_logits_to_keep: int = 0,
     ) -> Union[Tuple, CoEncoderCausalLMOutputWithPast]:
         """
         Perform a forward pass through the CoEncoder model, optionally conditioning on context input.
@@ -654,7 +655,9 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
             past_key_values (`List[torch.FloatTensor]`, *optional*):
                 Pre-computed hidden-states (key and value tensors) that can be used to speed up sequential decoding.
             labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
-                Labels for computing the language modeling loss.
+                Labels for computing the masked language modeling loss. Indices should either be in `[0, ...,
+                config.vocab_size]` or -100 (see `input_ids` docstring). Tokens with indices set to `-100` are ignored
+                (masked), the loss is only computed for the tokens with labels in `[0, ..., config.vocab_size]`.
             use_cache (`bool`, *optional*):
                 If `True`, past key values will be used to speed up decoding.
             output_attentions (`bool`, *optional*):
@@ -663,6 +666,10 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
                 If `True`, return the hidden states of all layers.
             return_dict (`bool`, *optional*):
                 If `True`, return a `CoEncoderCausalLMOutputWithPast` instead of a plain tuple.
+            num_logits_to_keep (`int`, *optional*):
+                Calculate logits for the last `num_logits_to_keep` tokens. If `0`, calculate logits for all
+                `input_ids` (special case). Only last token logits are needed for generation, and calculating them only for that
+                token can save memory, which becomes pretty significant for long sequences or large vocabulary size.
 
         Returns:
             `Union[Tuple, CoEncoderCausalLMOutputWithPast]`: A tuple containing various model outputs or a `CoEncoderCausalLMOutputWithPast` instance.
@@ -736,6 +743,8 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
         )
 
         logits = outputs[0]
+        # Only compute necessary logits, and do not upcast them to float if we are not computing the loss
+        logits = self.lm_head(logits[:, -num_logits_to_keep:, :])
 
         loss = None
         if labels is not None:
