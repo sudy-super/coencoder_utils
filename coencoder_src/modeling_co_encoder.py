@@ -252,7 +252,7 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
         )
         self.scale_param = nn.Parameter(torch.tensor(0.01))
 
-    def forward(self, hidden_states):
+    def forward(self, hidden_states, context_attention_mask=None):
         """
         Args:
             x: Input tensor of shape (batch_size, seq_len, hidden_size)
@@ -290,6 +290,9 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
         # attention_weights: (batch_size, seq_len)
         attention_weights = torch.sigmoid(attn_output_weights).squeeze(-1)
 
+        if context_attention_mask is not None:
+            attention_weights = attention_weights * context_attention_mask
+
         # Initialize output tensors
         # pooled_output: (batch_size, max_pooled_len, hidden_size)
         pooled_output = torch.zeros(
@@ -309,6 +312,7 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
    
             # Perform weighted pooling
             pooled_values = []
+            batch_attn_mask = torch.zeros(output_size, dtype=torch.bool, device=device)
             # Split the sequence evenly
             intervals = torch.linspace(0, seq_len, steps=output_size + 1).long()
             for i in range(output_size):
@@ -323,14 +327,14 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
                     # Calculate weighted average
                     weighted_input = chunk_input * chunk_weights.unsqueeze(-1)  # Shape: (chunk_size, hidden_size)
                     pooled_value = weighted_input.sum(dim=0) / (chunk_weights.sum() + 1e-8)  # Shape: (hidden_size)
+                    batch_attn_mask[i] = True
                 pooled_values.append(pooled_value)
 
             # Convert the result to a tensor
             pooled_values = torch.stack(pooled_values)  # Shape: (output_size, hidden_size)
             # Store the result
             pooled_output[batch_idx, -output_size:] = pooled_values
-            attention_mask[batch_idx, -output_size:] = True
-
+            attention_mask[batch_idx, -output_size:] = batch_attn_mask
         return pooled_output, attention_mask, dynamic_output_sizes
 
 
@@ -352,14 +356,12 @@ class CoEncoderContextLanguageConnector(nn.Module):
             bias=True
         )
 
-    def forward(self, context_features, only_padding):
-        if only_padding:
-            return None, None
-        
+    def forward(self, context_features, context_attention_mask=None):
         # context_features: [batch_size, seq_len, hidden_size]
         # Apply dynamic adaptive average pooling with attention
         pooled_output, attention_mask, dynamic_output_sizes = self.dynamic_pooling(
             hidden_states=context_features,
+            context_attention_mask=context_attention_mask,
         )
         # pooled_output: [batch_size, max_pooled_len, hidden_size]
 
@@ -389,11 +391,7 @@ class CoEncoderContextTower(nn.Module):
         input_ids,
         inputs_embeds,
         attention_mask,
-        only_padding
-    ): 
-        if only_padding:
-            return None
-        
+    ):
         outputs = self.tower(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
@@ -675,21 +673,16 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
         if all_inputs_none:
             raise ValueError("You must provide either non-empty input_ids/inputs_embeds or context_input_ids/context_inputs_embeds.")
 
-        only_padding = False
-        if context_input_ids is not None:
-            if torch.all(context_input_ids == self.config.context_config.eos_token_id):
-                only_padding = True
 
         if context_input_ids is not None or context_inputs_embeds is not None:
             context_features = self.context_tower(
                 input_ids=context_input_ids,
                 inputs_embeds=context_inputs_embeds,
                 attention_mask=context_attention_mask,
-                only_padding=only_padding
             )
             context_features, context_attention_mask = self.connector(
                 context_features=context_features,
-                only_padding=only_padding
+                context_attention_mask=context_attention_mask,
             )
         else:
             context_features = None
