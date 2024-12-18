@@ -120,11 +120,11 @@ def generate_inputs(batch):
     texts = []
     for context, conversations in zip(contexts_list, conversations_list): # for context, conversations in zip(batch.get("context", [""]), batch["conversations"]):
         if not context:
-            context = tokenizer.context_tokenizer.pad_token # ""  # contextがNoneまたは空の場合、空文字列に設定
+            context = ""  # contextがNoneまたは空の場合、空文字列に設定
         text = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 
 Cutting Knowledge Date: December 2023
-Today Date: 17 Dec 2024
+Today Date: 8 Dec 2024
 
 <|eot_id|>"""
         for c in conversations:
@@ -187,7 +187,7 @@ def preprocess_and_tokenize_with_context(dataset, desc_prefix):
         num_proc=8,
         desc=f"Generating inputs for {desc_prefix}",
         load_from_cache_file=True
-    ).filter(lambda x: x['text'] != '', num_proc=8).filter(lambda x: x['context'] != '', num_proc=8).filter(lambda x: x['context'] != tokenizer.context_tokenizer.pad_token, num_proc=8)
+    ).filter(lambda x: x['text'] != '', num_proc=8).filter(lambda x: x['context'] != '', num_proc=8)#.filter(lambda x: x['context'] != tokenizer.context_tokenizer.pad_token, num_proc=8)
 
     dataset = dataset.map(
         tokenize,
@@ -373,12 +373,20 @@ def data_collator(features):
         'input_ids': f['context_input_ids'],
         'attention_mask': f.get('context_attention_mask', [1] * len(f['context_input_ids']))
     } for f in features]
+    
     context_batch = tokenizer.context_tokenizer.pad(
         context_features,
         padding=True,
         max_length=None,
         return_tensors="pt"
     )
+    
+    # padトークンのみで構成されているかチェック
+    pad_token_id = tokenizer.context_tokenizer.pad_token_id
+    is_all_padding = (context_batch['input_ids'] == pad_token_id).all(dim=1)
+    # all paddingの場合、attention_maskを0に設定
+    context_batch['attention_mask'][is_all_padding] = 0
+    
     # text部分のトークンをパディング
     text_features = [{
         'input_ids': f['input_ids'],
@@ -390,6 +398,7 @@ def data_collator(features):
         max_length=None,
         return_tensors="pt"
     )
+    
     # ラベルのパディング（input_idsと同じ）
     label_features = [{'input_ids': f['input_ids']} for f in features]
     labels_batch = tokenizer.text_tokenizer.pad(
@@ -398,6 +407,7 @@ def data_collator(features):
         max_length=None,
         return_tensors="pt"
     )
+    
     # パディングされたバッチを統合
     batch = {
         'context_input_ids': context_batch['input_ids'],
