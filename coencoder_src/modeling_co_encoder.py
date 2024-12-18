@@ -742,7 +742,7 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
             return_dict=return_dict,
         )
 
-        logits = outputs[0]
+        logits = outputs.logits
 
         loss = None
         if labels is not None:
