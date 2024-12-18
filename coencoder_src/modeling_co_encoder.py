@@ -632,6 +632,7 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
+        cache_position: Optional[torch.LongTensor] = None,
         num_logits_to_keep: int = 0,
     ) -> Union[Tuple, CoEncoderCausalLMOutputWithPast]:
         """
@@ -729,6 +730,8 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
         else:
             inputs_embeds = context_features
             attention_mask = context_attention_mask
+        
+        print(labels)
 
         outputs = self.language_model(
             attention_mask=attention_mask,
@@ -740,6 +743,8 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
+            cache_position=cache_position,
+            num_logits_to_keep=num_logits_to_keep
         )
 
         logits = outputs.logits
@@ -749,7 +754,7 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
             shift_logits = logits[..., :-1, :].contiguous()
             shift_labels = labels[..., 1:].contiguous()
             loss_fct = nn.CrossEntropyLoss(ignore_index=self.ignore_index)
-            loss = loss_fct(shift_logits.view(-1, self.vocab_size), shift_labels.view(-1).to(shift_logits.device))
+            loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1).to(shift_logits.device))
 
         if not return_dict:
             output = (logits,) + outputs[1:]
