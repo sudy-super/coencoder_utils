@@ -376,6 +376,10 @@ class CoEncoderContextLanguageConnector(nn.Module):
         )
         # pooled_output: [batch_size, max_pooled_len, hidden_size]
 
+        # If pooling returns None (all padding case), return None for both outputs
+        if pooled_output is None:
+            return None, None
+
         hidden_states = self.linear_1(pooled_output)
         hidden_states = self.act(hidden_states)
         hidden_states = self.linear_2(hidden_states)
