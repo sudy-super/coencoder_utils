@@ -23,7 +23,7 @@ from datetime import datetime
 
 import torch.distributed as dist
 
-phase = 1
+phase = 2
 
 # DeepSpeedがtorch.distributedの初期化を行うため、その後でランクを取得します
 dist.init_process_group(backend='nccl')  # 必要に応じてバックエンドを指定
@@ -120,11 +120,11 @@ def generate_inputs(batch):
     texts = []
     for context, conversations in zip(contexts_list, conversations_list): # for context, conversations in zip(batch.get("context", [""]), batch["conversations"]):
         if not context:
-            context = ""  # contextがNoneまたは空の場合、空文字列に設定
+            context = tokenizer.context_tokenizer.pad_token # ""  # contextがNoneまたは空の場合、空文字列に設定
         text = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 
 Cutting Knowledge Date: December 2023
-Today Date: 8 Dec 2024
+Today Date: 17 Dec 2024
 
 <|eot_id|>"""
         for c in conversations:
@@ -187,7 +187,7 @@ def preprocess_and_tokenize_with_context(dataset, desc_prefix):
         num_proc=8,
         desc=f"Generating inputs for {desc_prefix}",
         load_from_cache_file=True
-    ).filter(lambda x: x['text'] != '', num_proc=8).filter(lambda x: x['context'] != '', num_proc=8)#.filter(lambda x: x['context'] != tokenizer.context_tokenizer.pad_token, num_proc=8)
+    ).filter(lambda x: x['text'] != '', num_proc=8).filter(lambda x: x['context'] != '', num_proc=8).filter(lambda x: x['context'] != tokenizer.context_tokenizer.pad_token, num_proc=8)
 
     dataset = dataset.map(
         tokenize,
