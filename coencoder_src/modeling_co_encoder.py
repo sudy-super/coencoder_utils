@@ -744,7 +744,7 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
 
         logits = outputs[0]
         # Only compute necessary logits, and do not upcast them to float if we are not computing the loss
-        logits = self.lm_head(logits[:, -num_logits_to_keep:, :])
+        logits = self.language_model.lm_head(logits[:, -num_logits_to_keep:, :])
 
         loss = None
         if labels is not None:
