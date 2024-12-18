@@ -678,7 +678,7 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
             context_features = self.context_tower(
                 input_ids=context_input_ids,
                 inputs_embeds=context_inputs_embeds,
-                attention_mask=context_attention_mask,
+                attention_mask=None,
             )
             context_features, context_attention_mask = self.connector(
                 context_features=context_features,
