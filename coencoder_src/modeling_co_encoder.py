@@ -266,6 +266,31 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
         batch_size, seq_len, hidden_size = hidden_states.size()
         device = hidden_states.device
 
+        # Check if all inputs are padding (no valid tokens)
+        input_sum = hidden_states.abs().sum(dim=(1, 2))
+        all_padding_mask = input_sum == 0
+
+        if all_padding_mask.all():
+            # 全てパディングの場合はダミーの出力を返す
+            # ダミーのpooled_output: 全て0, (batch_size, output_size_min, hidden_size)
+            pooled_output = torch.zeros(
+                batch_size, self.output_size_min, hidden_size, 
+                device=device, dtype=hidden_states.dtype
+            )
+            # attention_mask: 全て0 (False), (batch_size, output_size_min)
+            attention_mask = torch.zeros(
+                batch_size, self.output_size_min, 
+                dtype=torch.bool, device=device
+            )
+            # dynamic_output_sizes: 全てoutput_size_min
+            dynamic_output_sizes = torch.full(
+                (batch_size,),
+                self.output_size_min,
+                dtype=torch.int,
+                device=device
+            )
+            return pooled_output, attention_mask, dynamic_output_sizes
+
         # Estimate output size using attention mechanism
         # attn_output_size: (batch_size, seq_len, 1)
         attn_output_size, _ = self.size_estimation_attention(hidden_states)
