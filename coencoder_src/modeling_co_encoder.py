@@ -252,7 +252,7 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
         )
         self.scale_param = nn.Parameter(torch.tensor(0.01))
 
-    def forward(self, hidden_states, context_attention_mask=None):
+    def forward(self, hidden_states):
         """
         Args:
             x: Input tensor of shape (batch_size, seq_len, hidden_size)
@@ -266,15 +266,14 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
         batch_size, seq_len, hidden_size = hidden_states.size()
         device = hidden_states.device
 
-        # Check if all inputs are padding (no valid tokens)
-        if context_attention_mask is not None:
-            valid_tokens_per_sample = context_attention_mask.sum(dim=1)  # (batch_size,)
-            all_padding_mask = (valid_tokens_per_sample == 0)
-        else:
-            input_sum = hidden_states.abs().sum(dim=(1, 2))
-            all_padding_mask = (input_sum == 0)
+        # Check if the input consists only of padding
+        # Sum along the sequence length and hidden dimensions
+        input_sum = hidden_states.abs().sum(dim=(1, 2))  # [batch_size]
+        all_padding_mask = input_sum == 0  # [batch_size]
 
+        # If all samples in the batch are padding
         if all_padding_mask.all():
+            # Return None for all outputs
             return None, None, None
 
         # Estimate output size using attention mechanism
@@ -291,8 +290,15 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
             (scaled_batch_means * (self.output_size_max - self.output_size_min)) + self.output_size_min
         ).int().squeeze(-1)
 
-        # Get the maximum output size across the batch
-        max_pooled_len = dynamic_output_sizes.max().item()
+        # Handle padding samples individually
+        dynamic_output_sizes = torch.where(
+            all_padding_mask,
+            torch.full_like(dynamic_output_sizes, self.output_size_min),
+            dynamic_output_sizes
+        )
+
+        # Get the maximum output size across non-padding samples
+        max_pooled_len = dynamic_output_sizes[~all_padding_mask].max().item()
 
         # Compute attention weights for weighted pooling
         # attn_output_weights: (batch_size, seq_len, 1)
@@ -300,9 +306,6 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
         # Normalize with sigmoid function for use as weights
         # attention_weights: (batch_size, seq_len)
         attention_weights = torch.sigmoid(attn_output_weights).squeeze(-1)
-
-        if context_attention_mask is not None:
-            attention_weights = attention_weights * context_attention_mask
 
         # Initialize output tensors
         # pooled_output: (batch_size, max_pooled_len, hidden_size)
@@ -317,13 +320,16 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
         )
 
         for batch_idx in range(batch_size):
+            if all_padding_mask[batch_idx]:
+                # Skip processing for padding samples
+                continue
+
             output_size = dynamic_output_sizes[batch_idx].item()
             item_input = hidden_states[batch_idx]  # Shape: (seq_len, hidden_size)
             item_weights = attention_weights[batch_idx]  # Shape: (seq_len)
    
             # Perform weighted pooling
             pooled_values = []
-            batch_attn_mask = torch.zeros(output_size, dtype=torch.bool, device=device)
             # Split the sequence evenly
             intervals = torch.linspace(0, seq_len, steps=output_size + 1).long()
             for i in range(output_size):
@@ -338,14 +344,15 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
                     # Calculate weighted average
                     weighted_input = chunk_input * chunk_weights.unsqueeze(-1)  # Shape: (chunk_size, hidden_size)
                     pooled_value = weighted_input.sum(dim=0) / (chunk_weights.sum() + 1e-8)  # Shape: (hidden_size)
-                    batch_attn_mask[i] = True
                 pooled_values.append(pooled_value)
 
-            # Convert the result to a tensor
-            pooled_values = torch.stack(pooled_values)  # Shape: (output_size, hidden_size)
-            # Store the result
-            pooled_output[batch_idx, -output_size:] = pooled_values
-            attention_mask[batch_idx, -output_size:] = batch_attn_mask
+            if pooled_values:  # Only stack if there are values
+                # Convert the result to a tensor
+                pooled_values = torch.stack(pooled_values)  # Shape: (output_size, hidden_size)
+                # Store the result
+                pooled_output[batch_idx, -output_size:] = pooled_values
+                attention_mask[batch_idx, -output_size:] = True
+
         return pooled_output, attention_mask, dynamic_output_sizes
 
 
@@ -367,15 +374,12 @@ class CoEncoderContextLanguageConnector(nn.Module):
             bias=True
         )
 
-    def forward(self, context_features, context_attention_mask=None):
-        # context_features: [batch_size, seq_len, hidden_size]
+    def forward(self, context_features):
         # Apply dynamic adaptive average pooling with attention
         pooled_output, attention_mask, dynamic_output_sizes = self.dynamic_pooling(
-            hidden_states=context_features,
-            context_attention_mask=context_attention_mask,
+            hidden_states=context_features
         )
-        # pooled_output: [batch_size, max_pooled_len, hidden_size]
-
+        
         # If pooling returns None (all padding case), return None for both outputs
         if pooled_output is None:
             return None, None
@@ -405,7 +409,7 @@ class CoEncoderContextTower(nn.Module):
         self,
         input_ids,
         inputs_embeds,
-        attention_mask,
+        attention_mask
     ):
         outputs = self.tower(
             input_ids=input_ids,
@@ -413,8 +417,8 @@ class CoEncoderContextTower(nn.Module):
             attention_mask=attention_mask,
             output_hidden_states=True
         )
+        
         features = self.feature_select(outputs)
-
         return features
     
 
@@ -693,11 +697,10 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
             context_features = self.context_tower(
                 input_ids=context_input_ids,
                 inputs_embeds=context_inputs_embeds,
-                attention_mask=None,
+                attention_mask=context_attention_mask,
             )
             context_features, context_attention_mask = self.connector(
-                context_features=context_features,
-                context_attention_mask=context_attention_mask,
+                context_features=context_features
             )
         else:
             context_features = None
