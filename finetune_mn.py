@@ -642,7 +642,7 @@ args = TrainingArguments(
     optim="adamw_torch_fused",
     dataloader_pin_memory=False,
     dataloader_num_workers=2,
-    local_rank=int(os.environ.get("LOCAL_RANK", -1)),
+    # local_rank=int(os.environ.get("LOCAL_RANK", -1)),
     ddp_timeout=7200,
     # group_by_length=True,
 )
