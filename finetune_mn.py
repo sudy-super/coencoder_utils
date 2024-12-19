@@ -120,11 +120,11 @@ def generate_inputs(batch):
     texts = []
     for context, conversations in zip(contexts_list, conversations_list): # for context, conversations in zip(batch.get("context", [""]), batch["conversations"]):
         if not context:
-            context = tokenizer.context_tokenizer.pad_token # ""  # contextがNoneまたは空の場合、空文字列に設定
+            context = tokenizer.context_tokenizer.pad_token * 32 # ""  # contextがNoneまたは空の場合、空文字列に設定
         text = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 
 Cutting Knowledge Date: December 2023
-Today Date: 17 Dec 2024
+Today Date: 19 Dec 2024
 
 <|eot_id|>"""
         for c in conversations:
@@ -187,7 +187,7 @@ def preprocess_and_tokenize_with_context(dataset, desc_prefix):
         num_proc=8,
         desc=f"Generating inputs for {desc_prefix}",
         load_from_cache_file=True
-    ).filter(lambda x: x['text'] != '', num_proc=8).filter(lambda x: x['context'] != '', num_proc=8).filter(lambda x: x['context'] != tokenizer.context_tokenizer.pad_token, num_proc=8)
+    ).filter(lambda x: x['text'] != '', num_proc=8).filter(lambda x: x['context'] != '', num_proc=8).filter(lambda x: x['context'] != tokenizer.context_tokenizer.pad_token * 32, num_proc=8)
 
     dataset = dataset.map(
         tokenize,

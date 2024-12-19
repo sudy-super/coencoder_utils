@@ -252,7 +252,7 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
         )
         self.scale_param = nn.Parameter(torch.tensor(0.01))
 
-    def forward(self, hidden_states):
+    def forward(self, hidden_states, context_attention_mask=None):
         """
         Args:
             x: Input tensor of shape (batch_size, seq_len, hidden_size)
@@ -307,6 +307,10 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
         # attention_weights: (batch_size, seq_len)
         attention_weights = torch.sigmoid(attn_output_weights).squeeze(-1)
 
+        # If context_attention_mask is provided, apply it to zero out weights for invalid tokens
+        if context_attention_mask is not None:
+            attention_weights = attention_weights * context_attention_mask
+
         # Initialize output tensors
         # pooled_output: (batch_size, max_pooled_len, hidden_size)
         pooled_output = torch.zeros(
@@ -330,6 +334,7 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
    
             # Perform weighted pooling
             pooled_values = []
+            batch_attn_mask = torch.zeros(output_size, dtype=torch.bool, device=device)
             # Split the sequence evenly
             intervals = torch.linspace(0, seq_len, steps=output_size + 1).long()
             for i in range(output_size):
@@ -344,6 +349,7 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
                     # Calculate weighted average
                     weighted_input = chunk_input * chunk_weights.unsqueeze(-1)  # Shape: (chunk_size, hidden_size)
                     pooled_value = weighted_input.sum(dim=0) / (chunk_weights.sum() + 1e-8)  # Shape: (hidden_size)
+                    batch_attn_mask[i] = True
                 pooled_values.append(pooled_value)
 
             if pooled_values:  # Only stack if there are values
@@ -351,7 +357,7 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
                 pooled_values = torch.stack(pooled_values)  # Shape: (output_size, hidden_size)
                 # Store the result
                 pooled_output[batch_idx, -output_size:] = pooled_values
-                attention_mask[batch_idx, -output_size:] = True
+                attention_mask[batch_idx, -output_size:] = batch_attn_mask
 
         return pooled_output, attention_mask, dynamic_output_sizes
 
@@ -747,7 +753,7 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
             num_logits_to_keep=num_logits_to_keep
         )
 
-        logits = outputs.logits
+        logits = outputs[0]
 
         loss = None
         if labels is not None:
