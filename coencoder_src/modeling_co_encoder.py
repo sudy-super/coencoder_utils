@@ -290,15 +290,7 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
             (scaled_batch_means * (self.output_size_max - self.output_size_min)) + self.output_size_min
         ).int().squeeze(-1)
 
-        # Handle padding samples individually
-        dynamic_output_sizes = torch.where(
-            all_padding_mask,
-            torch.full_like(dynamic_output_sizes, self.output_size_min),
-            dynamic_output_sizes
-        )
-
-        # Get the maximum output size across non-padding samples
-        max_pooled_len = dynamic_output_sizes[~all_padding_mask].max().item()
+        max_pooled_len = dynamic_output_sizes.max().item()
 
         # Compute attention weights for weighted pooling
         # attn_output_weights: (batch_size, seq_len, 1)
