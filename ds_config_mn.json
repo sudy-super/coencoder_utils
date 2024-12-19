@@ -52,10 +52,10 @@
         "size": 8
     },
     "pipeline": {
-        "pipeline_model_parallel_size": 2,
+        "pipeline_model_parallel_size": 1,
         "activation_checkpoint_interval": 1,
         "prescale_gradients": true,
-        "stages": 2
+        "stages": 1
     },
     "data_parallel_size": 1,
     "activation_checkpointing": {
