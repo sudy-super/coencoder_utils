@@ -745,7 +745,7 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
             num_logits_to_keep=num_logits_to_keep
         )
 
-        logits = outputs[0]
+        logits = outputs.logits
 
         loss = None
         if labels is not None:
