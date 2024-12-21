@@ -316,10 +316,6 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
         )
 
         for batch_idx in range(batch_size):
-            if all_padding_mask[batch_idx]:
-                # Skip processing for padding samples
-                continue
-
             output_size = dynamic_output_sizes[batch_idx].item()
             item_input = hidden_states[batch_idx]  # Shape: (seq_len, hidden_size)
             item_weights = attention_weights[batch_idx]  # Shape: (seq_len)
@@ -736,7 +732,6 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
             position_ids=position_ids,
             past_key_values=past_key_values,
             inputs_embeds=inputs_embeds,
-            labels=labels,
             use_cache=use_cache,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
@@ -745,7 +740,7 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
             num_logits_to_keep=num_logits_to_keep
         )
 
-        logits = outputs.logits
+        logits = outputs[0]
 
         loss = None
         if labels is not None:
