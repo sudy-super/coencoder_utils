@@ -1,6 +1,6 @@
 from  transformers import AutoTokenizer
 
-tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-0.5B", token="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")
+tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-7B-Instruct", token="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")
 
 messages = [
     # {"role": "system", "content": "You are an honest and talented Japanese assistant."},
