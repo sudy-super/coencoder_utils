@@ -723,8 +723,6 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
         else:
             inputs_embeds = context_features
             attention_mask = context_attention_mask
-        
-        print(labels)
 
         outputs = self.language_model(
             attention_mask=attention_mask,
