@@ -26,29 +26,32 @@ import torch.distributed as dist
 phase = 2
 
 # DeepSpeedがtorch.distributedの初期化を行うため、その後でランクを取得します
-dist.init_process_group(backend='nccl')  # 必要に応じてバックエンドを指定
+#dist.init_process_group(backend='nccl')  # 必要に応じてバックエンドを指定
 
 # グローバルランク0のプロセスのみでWandBを初期化
+"""
 if dist.get_rank() == 0:
     if phase == 1:
         wandb.init(project="coencoder_finetune_mn", name="1e-3_coencoder_connector", entity="sudy_super")
     elif phase == 2:
-        wandb.init(project="coencoder_finetune_mn", name="2e-5_coencoder_llm", entity="sudy_super")
+        wandb.init(project="coencoder_finetune_mn", name="2e-5_coencoder_llm_debug", entity="sudy_super")
     else:
         raise ValueError("Invalid phase value. Must be 1 or 2.")
+"""
 
 torch.manual_seed(42)
+torch.cuda.manual_seed(42)
 
 if phase == 1:
     model_name = "sudy-super/coencoder_test2"
 elif phase == 2:
-    model_name = "sudy-super/coencoder_test2_phase1_2"
+    model_name = "../coencoder_debug" # "sudy-super/coencoder_test2_phase1_2"
 else:
     raise ValueError("Invalid phase value. Must be 1 or 2.")
 
 # CoEncoderトークナイザーとモデルの読み込み
 try:
-    tokenizer = CoEncoderDualTokenizer.from_pretrained("./co_model", trust_remote_code=True, use_fast=False)
+    tokenizer = CoEncoderDualTokenizer.from_pretrained("./co_model_debug", trust_remote_code=True, use_fast=False)
 except:
     print("[INFO] Failed to load tokenizer with use_fast=False. Retrying with use_fast=True.")
     tokenizer = CoEncoderDualTokenizer.from_pretrained("./co_model", trust_remote_code=True)
@@ -144,7 +147,7 @@ Today Date: 9 Jan 2025
         text = ""
         for c in conversations:
             if c["from"] == "user":
-                text += f"<|user|>{c['value']}</s>"
+                text += f"<|user|>{c['value']}</s>\n"
             elif c["from"] == "assistant":
                 text += f"""<|assistant|>{c['value']}</s>"""
         contexts.append(context)
@@ -359,9 +362,9 @@ if phase == 2:
         test_data_en
     ])
 
+    train_data = concatenate_datasets([train_data, test_data])
     train_data_used = train_data_used.shuffle(seed=42)
     eval_data_used = eval_data_used.shuffle(seed=42)
-    test_data = test_data.shuffle(seed=42)
 
     print(f"Number of train samples(unused): {len(train_data_unused)}")
     print(f"Number of validation samples(unused): {len(eval_data_unused)}")
@@ -373,7 +376,6 @@ if phase == 2:
 # データセットの件数をカウントして表示
 print(f"Number of train samples: {len(train_data_used)}")
 print(f"Number of validation samples: {len(eval_data_used)}")
-print(f"Number of test samples: {len(test_data)}")
 
 # train_data_sorted = train_data_used.sort('length')
 
@@ -428,6 +430,7 @@ def data_collator(features):
         'labels': labels_batch['input_ids']
     }
     return batch
+"""
 """
 def data_collator(features):
     # context部分のトークンをパディング
@@ -495,6 +498,153 @@ def data_collator(features):
         }
 
     return batch
+"""
+class DataCollatorAssistantWithContext:
+    """
+    1) context_input_ids, context_attention_mask を含む入力をパディング・整形し、
+       コンテキストがすべて pad のときはそれを削除、部分的に pad のときは attention_mask を 0 に。
+    2) メインテキスト (input_ids, attention_mask) もパディングし、labels もパディング。
+    3) 「<|assistant|> ～ </s>」以外のトークンを -100 に置き換え、アシスタント部分のみ学習対象にする。
+    """
+
+    def __init__(self, tokenizer):
+        """
+        tokenizer には以下のような想定:
+            tokenizer.context_tokenizer
+            tokenizer.text_tokenizer
+            （context / text を分けている場合）
+        もし単一の tokenizer のみ使用なら適宜書き換えてください。
+        """
+
+        self.tokenizer = tokenizer
+
+        # 新しいチャットテンプレートに合わせた特殊トークンID
+        #   <|assistant|> => 51201
+        #   </s>          => 2
+        self.assistant_start_id = 51201  # <|assistant|>
+        self.assistant_end_id   = 2      # </s>
+
+    def __call__(self, features):
+        """
+        features は下記形式のリストを想定:
+        [
+            {
+                "context_input_ids": [...],
+                "context_attention_mask": [...],  # 無い場合もある
+                "input_ids": [...],
+                "attention_mask": [...],
+            },
+            ...
+        ]
+        """
+
+        # ---------------------------------------------------
+        # 1) コンテキスト部分のパディング & 全padチェック
+        # ---------------------------------------------------
+        context_features = []
+        for f in features:
+            if "context_input_ids" in f:
+                context_features.append({
+                    'input_ids': f["context_input_ids"],
+                    'attention_mask': f.get("context_attention_mask", [1]*len(f["context_input_ids"]))
+                })
+            else:
+                # コンテキストが無い場合は空
+                context_features.append({
+                    'input_ids': [],
+                    'attention_mask': []
+                })
+
+        context_batch = self.tokenizer.context_tokenizer.pad(
+            context_features,
+            padding=True,
+            return_tensors="pt"
+        )
+        pad_token_id = self.tokenizer.context_tokenizer.pad_token_id
+
+        # [batch_size, seq_len] => 行方向にpad判定 => 全サンプルがTrueなら True
+        all_context_is_pad = (context_batch["input_ids"] == pad_token_id).all(dim=1).all()
+
+        # ---------------------------------------------------
+        # 2) テキスト部分のパディングと labels (初期値は同じ)
+        # ---------------------------------------------------
+        text_features = [{
+            'input_ids': f['input_ids'],
+            'attention_mask': f['attention_mask']
+        } for f in features]
+        text_batch = self.tokenizer.text_tokenizer.pad(
+            text_features,
+            padding=True,
+            return_tensors="pt"
+        )
+        label_features = [{'input_ids': f['input_ids']} for f in features]
+        labels_batch = self.tokenizer.text_tokenizer.pad(
+            label_features,
+            padding=True,
+            return_tensors="pt"
+        )
+
+        # ---------------------------------------------------
+        # 3) コンテキスト削除 or 部分的 pad の場合の attention_mask 調整
+        # ---------------------------------------------------
+        if all_context_is_pad:
+            # バッチ内すべてが pad の場合は context を無視
+            batch = {
+                "input_ids": text_batch["input_ids"],
+                "attention_mask": text_batch["attention_mask"],
+                "labels": labels_batch["input_ids"]
+            }
+        else:
+            # 一部だけ pad のサンプル => そのサンプルの context の attention_mask=0
+            is_all_padding_sample = (context_batch["input_ids"] == pad_token_id).all(dim=1)
+            context_batch["attention_mask"][is_all_padding_sample] = 0
+
+            batch = {
+                "context_input_ids": context_batch["input_ids"],
+                "context_attention_mask": context_batch["attention_mask"],
+                "input_ids": text_batch["input_ids"],
+                "attention_mask": text_batch["attention_mask"],
+                "labels": labels_batch["input_ids"]
+            }
+
+        # ---------------------------------------------------
+        # 4) アシスタント部分 (<|assistant|> ~ </s>) 以外を -100 に
+        # ---------------------------------------------------
+        labels = batch["labels"]
+        input_ids = batch["input_ids"]
+
+        batch_size = labels.size(0)
+        seq_len = labels.size(1)
+
+        for b_idx in range(batch_size):
+            token_ids = input_ids[b_idx]
+            in_assistant = False
+
+            i = 0
+            while i < seq_len:
+                tid = token_ids[i]
+
+                # <|assistant|> に遭遇したら、アシスタント区間開始
+                if tid == self.assistant_start_id:
+                    in_assistant = True
+                    # 開始トークン自体は学習させない
+                    labels[b_idx, i] = -100
+
+                # </s> に遭遇したら、アシスタント区間終了
+                elif tid == self.assistant_end_id:
+                    in_assistant = False
+                    # 終了トークン </s> も学習させない
+                    labels[b_idx, i] = -100
+
+                else:
+                    # アシスタント区間外はすべて -100
+                    if not in_assistant:
+                        labels[b_idx, i] = -100
+
+                i += 1
+
+        batch["labels"] = labels
+        return batch
 
 
 # サンプルの長さに基づいてデータをソートし、バッチを形成するためのカスタムサンプラー
@@ -715,7 +865,7 @@ args = TrainingArguments(
     seed=42,
     bf16=True,  # bf16を有効化
     bf16_full_eval=True,
-    deepspeed="ds_config_mn.json",  # DeepSpeed設定ファイルの指定
+    #deepspeed="ds_config_mn.json",  # DeepSpeed設定ファイルの指定
     gradient_checkpointing=True,
     optim="adamw_torch_fused",
     dataloader_pin_memory=False,
@@ -731,7 +881,7 @@ trainer = CustomTrainer(
     args=args,
     train_dataset=train_data_used,
     eval_dataset=eval_data_used,
-    data_collator=data_collator,
+    data_collator=DataCollatorAssistantWithContext(tokenizer), # data_collator,
 )
 
 print("[INFO] Trainer initialized successfully.")
@@ -744,13 +894,3 @@ for name, param in model.connector.named_parameters():
 
 # 学習済みモデルの保存
 model.save_pretrained("co_output_model", safe_serialization=True)
-
-# テストデータでの評価または予測
-test_results = trainer.predict(test_dataset=test_data)
-predictions = test_results.predictions
-
-# 必要に応じて予測結果を保存
-decoded_preds = tokenizer.batch_decode(predictions, skip_special_tokens=True)
-with open("test_predictions.txt", "w", encoding="utf-8") as f:
-    for pred in decoded_preds:
-        f.write(pred + "\n")
