@@ -163,7 +163,7 @@ def tokenize(batch):
     truncated_contexts = []
     for context in batch['context']:
         # contextを単独でトークン化してトークン数を確認
-        context_tokens = tokenizer.context_tokenizer.tokenize(context, add_special_tokens=False,)
+        context_tokens = tokenizer.context_tokenizer.tokenize(context)
         if len(context_tokens) > max_context_tokens:
             # トークン数が65536を超える場合、カット
             context = tokenizer.context_tokenizer.convert_tokens_to_string(context_tokens[:max_context_tokens])
