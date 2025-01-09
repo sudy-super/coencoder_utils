@@ -361,8 +361,8 @@ if phase == 2:
         test_data_ja, 
         test_data_en
     ])
-
-    train_data = concatenate_datasets([train_data, test_data])
+    if phase == 2:
+        train_data_used = concatenate_datasets([train_data, test_data])
     train_data_used = train_data_used.shuffle(seed=42)
     eval_data_used = eval_data_used.shuffle(seed=42)
 
