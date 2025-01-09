@@ -1,0 +1,126 @@
+{
+  "add_prefix_space": true,
+  "added_tokens_decoder": {
+    "0": {
+      "content": "<unk>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "1": {
+      "content": "<s>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "2": {
+      "content": "</s>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "3": {
+      "content": "<pad>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "4": {
+      "content": "<sep>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "5": {
+      "content": "<mask>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "6": {
+      "content": "<cls>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "51200": {
+      "content": "<|system|>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "51201": {
+      "content": "<|assistant|>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "51202": {
+      "content": "<|user|>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "51203": {
+      "content": "<|start_of_context|>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "51204": {
+      "content": "<|end_of_context|>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    }
+  },
+  "additional_special_tokens": [
+    "<|system|>",
+    "<|assistant|>",
+    "<|user|>",
+    "<|start_of_context|>",
+    "<|end_of_context|>"
+  ],
+  "bos_token": "<s>",
+  "chat_template": "{%- for message in messages -%}\n{%- if message['role'] == 'assistant' -%}\n{{ '<|assistant|>' + message['content'] + eos_token }}\n{%- elif message['role'] == 'system' -%}\n{{ '<|system|>' + message['content'] + eos_token }}\n{%- elif message['role'] == 'user' -%}\n{{ '<|user|>' + message['content'] + eos_token }}\n{%- endif -%}\n{%- if loop.last and add_generation_prompt -%}\n{{ '<|assistant|>' }}\n{%- endif -%}\n{%- endfor -%}",
+  "clean_up_tokenization_spaces": true,
+  "cls_token": "<cls>",
+  "do_lower_case": false,
+  "eos_token": "</s>",
+  "extra_ids": 0,
+  "extra_special_tokens": {},
+  "keep_accents": true,
+  "legacy": true,
+  "mask_token": "<mask>",
+  "model_max_length": 1000000000000000019884624838656,
+  "pad_token": "<pad>",
+  "padding_side": "right",
+  "sep_token": "<sep>",
+  "sp_model_kwargs": {},
+  "tokenizer_class": "T5Tokenizer",
+  "unk_token": "<unk>"
+}
