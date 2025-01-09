@@ -245,6 +245,7 @@ def move_random_samples(eval_dataset, train_dataset, num_samples=4500):
 
 # 評価データセットから4000件をトレーニングデータセットに移す
 train_data, eval_data = move_random_samples(val_data, train_data, num_samples=4000)
+train_data = concatenate_datasets([train_data, test_data])
 
 num_train_samples = int(0.6 * len(train_data))
 train_data_used = train_data.select(range(num_train_samples))
@@ -261,10 +262,12 @@ if phase == 2:
     train_data_ja = train_data_ja.shuffle(seed=42)
     val_data_ja = val_data_ja.shuffle(seed=42)
     test_data_ja = test_data_ja.shuffle(seed=42)
+    train_data_ja = concatenate_datasets([train_data_ja, test_data_ja])
 
     train_data_en = train_data_en.shuffle(seed=42)
     val_data_en = val_data_en.shuffle(seed=42)
     test_data_en = test_data_en.shuffle(seed=42)
+    train_data_en = concatenate_datasets([train_data_en, test_data_en])
 
 # 前処理とトークン化を新しいデータセットにも適用
 def preprocess_and_tokenize(dataset, desc_prefix):
@@ -291,11 +294,9 @@ def preprocess_and_tokenize(dataset, desc_prefix):
 if phase == 2:
     train_data_ja = preprocess_and_tokenize(train_data_ja, "train_data_ja")
     val_data_ja = preprocess_and_tokenize(val_data_ja, "val_data_ja")
-    test_data_ja = preprocess_and_tokenize(test_data_ja, "test_data_ja")
 
     train_data_en = preprocess_and_tokenize(train_data_en, "train_data_en")
     val_data_en = preprocess_and_tokenize(val_data_en, "val_data_en")
-    test_data_en = preprocess_and_tokenize(test_data_en, "test_data_en")
 
     print("[INFO] Text-only data preprocessing and tokenization completed.")
 
@@ -356,13 +357,6 @@ if phase == 2:
         val_data_en
     ])
 
-    test_data = concatenate_datasets([
-        test_data,
-        test_data_ja, 
-        test_data_en
-    ])
-    if phase == 2:
-        train_data_used = concatenate_datasets([train_data, test_data])
     train_data_used = train_data_used.shuffle(seed=42)
     eval_data_used = eval_data_used.shuffle(seed=42)
 
