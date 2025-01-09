@@ -39,16 +39,31 @@ class CoEncoderTokenizerBuilder:
         Build the CoEncoder tokenizer from separate LLMs and save it.
         """
         # Load the separate models
-        context_tokenizer = AutoTokenizer.from_pretrained(
-            self.context_model_name, 
-            use_fast=True,
-            use_auth_token=self.auth_token if self.auth_token is not None else None
-        )
-        text_tokenizer = AutoTokenizer.from_pretrained(
-            self.text_model_name, 
-            use_fast=True,
-            use_auth_token=self.auth_token if self.auth_token is not None else None
-        )
+        try:
+            context_tokenizer = AutoTokenizer.from_pretrained(
+                self.context_model_name, 
+                use_fast=False,
+                use_auth_token=self.auth_token if self.auth_token is not None else None
+            )
+        except:
+                context_tokenizer = AutoTokenizer.from_pretrained(
+                self.context_model_name, 
+                use_fast=True,
+                use_auth_token=self.auth_token if self.auth_token is not None else None
+            )
+        
+        try:
+            text_tokenizer = AutoTokenizer.from_pretrained(
+                self.text_model_name, 
+                use_fast=True,
+                use_auth_token=self.auth_token if self.auth_token is not None else None
+            )
+        except:
+            text_tokenizer = AutoTokenizer.from_pretrained(
+                self.text_model_name, 
+                use_fast=False,
+                use_auth_token=self.auth_token if self.auth_token is not None else None
+            )
 
         context_tokenizer.save_pretrained(self.output_path + "/context_tokenizer")
         text_tokenizer.save_pretrained(self.output_path + "/text_tokenizer")
