@@ -876,7 +876,7 @@ args = TrainingArguments(
 )
 
 # Trainerの設定
-trainer = CustomTrainer(
+trainer = Trainer(
     model=model,
     args=args,
     train_dataset=train_data_used,
