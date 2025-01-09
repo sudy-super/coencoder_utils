@@ -1,8 +1,8 @@
-from transformers import LlamaTokenizer, LlamaForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 
 # 1. トークナイザーをロード
-tokenizer = LlamaTokenizer.from_pretrained("sbintuitions/tiny-lm-chat", use_fast=False)
+tokenizer = AutoTokenizer.from_pretrained("sbintuitions/tiny-lm-chat", use_fast=False)
 
 # 2. 特殊トークンを定義
 special_tokens = {"additional_special_tokens": ["<|start_of_context|>", "<|end_of_context|>"]}
@@ -11,7 +11,7 @@ special_tokens = {"additional_special_tokens": ["<|start_of_context|>", "<|end_o
 tokenizer.add_special_tokens(special_tokens)
 
 # 4. モデルをロード
-model = LlamaForCausalLM.from_pretrained("sbintuitions/tiny-lm-chat", torch_dtype=torch.bfloat16)
+model = AutoModelForCausalLM.from_pretrained("sbintuitions/tiny-lm-chat", torch_dtype=torch.bfloat16)
 
 # 5. モデルにトークナイザーの新しいボキャブラリーサイズを適用
 model.resize_token_embeddings(len(tokenizer))
