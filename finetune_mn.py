@@ -8,7 +8,7 @@ from safetensors.torch import load_file
 
 # CoEncoderモデルとトークナイザーのインポート
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from coencoder_src.modeling_co_encoder_simple import CoEncoderForConditionalGeneration
+from coencoder_src.modeling_co_encoder import CoEncoderForConditionalGeneration
 from coencoder_src.tokenization_co_encoder import CoEncoderDualTokenizer
 
 from accelerate import infer_auto_device_map, dispatch_model

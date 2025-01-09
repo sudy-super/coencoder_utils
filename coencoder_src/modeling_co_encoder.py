@@ -131,10 +131,6 @@ class CoEncoderDynamicAttention(nn.Module):
         # Compute attention scores
         attn_weights = torch.matmul(query_states, key_states.transpose(2, 3)) / math.sqrt(self.head_dim)
 
-        if attention_mask is not None:  # no matter the length, we just slice it
-            causal_mask = attention_mask[:, :, :, : key_states.shape[-2]]
-            attn_weights = attn_weights + causal_mask
-
         # Apply softmax to get attention probabilities
         attn_weights = nn.functional.softmax(attn_weights, dim=-1)
 
@@ -266,16 +262,6 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
         batch_size, seq_len, hidden_size = hidden_states.size()
         device = hidden_states.device
 
-        # Check if the input consists only of padding
-        # Sum along the sequence length and hidden dimensions
-        input_sum = hidden_states.abs().sum(dim=(1, 2))  # [batch_size]
-        all_padding_mask = input_sum == 0  # [batch_size]
-
-        # If all samples in the batch are padding
-        if all_padding_mask.all():
-            # Return None for all outputs
-            return None, None, None
-
         # Estimate output size using attention mechanism
         # attn_output_size: (batch_size, seq_len, 1)
         attn_output_size, _ = self.size_estimation_attention(hidden_states)
@@ -369,14 +355,11 @@ class CoEncoderContextLanguageConnector(nn.Module):
         )
 
     def forward(self, context_features):
+        # context_features: [batch_size, seq_len, hidden_size]
         # Apply dynamic adaptive average pooling with attention
         pooled_output, attention_mask, dynamic_output_sizes = self.dynamic_pooling(
             hidden_states=context_features
         )
-        
-        # If pooling returns None (all padding case), return None for both outputs
-        if pooled_output is None:
-            return None, None
 
         hidden_states = self.linear_1(pooled_output)
         hidden_states = self.act(hidden_states)
