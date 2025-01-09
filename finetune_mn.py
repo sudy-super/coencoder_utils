@@ -120,7 +120,7 @@ def generate_inputs(batch):
     texts = []
     for context, conversations in zip(contexts_list, conversations_list): # for context, conversations in zip(batch.get("context", [""]), batch["conversations"]):
         if not context:
-            context = tokenizer.context_tokenizer.pad_token * 32 # ""  # contextがNoneまたは空の場合、空文字列に設定
+            context = tokenizer.context_tokenizer.pad_token # ""  # contextがNoneまたは空の場合、空文字列に設定
         text = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 
 Cutting Knowledge Date: December 2023
@@ -366,7 +366,7 @@ print(f"Number of test samples: {len(test_data)}")
 
 # train_data_sorted = train_data_used.sort('length')
 
-
+"""
 def data_collator(features):
     # context部分のトークンをパディング
     context_features = [{
@@ -416,6 +416,73 @@ def data_collator(features):
         'attention_mask': text_batch['attention_mask'],
         'labels': labels_batch['input_ids']
     }
+    return batch
+"""
+def data_collator(features):
+    # context部分のトークンをパディング
+    context_features = [{
+        'input_ids': f['context_input_ids'],
+        'attention_mask': f.get('context_attention_mask', [1] * len(f['context_input_ids']))
+    } for f in features]
+    
+    context_batch = tokenizer.context_tokenizer.pad(
+        context_features,
+        padding=True,
+        max_length=None,
+        return_tensors="pt"
+    )
+    
+    # padトークンID
+    pad_token_id = tokenizer.context_tokenizer.pad_token_id
+    
+    # バッチ内すべてが pad_token_id かどうかを判定
+    # (shape: [batch_size, seq_len]) -> 行方向にすべてが pad_token_id かを判定し、
+    # さらにその結果がバッチ全体で True (すべてが True) になっているかを判定します。
+    all_context_is_pad = (context_batch['input_ids'] == pad_token_id).all(dim=1).all()
+    
+    # text部分の処理
+    text_features = [{
+        'input_ids': f['input_ids'],
+        'attention_mask': f['attention_mask']
+    } for f in features]
+    text_batch = tokenizer.text_tokenizer.pad(
+        text_features,
+        padding=True,
+        max_length=None,
+        return_tensors="pt"
+    )
+
+    # ラベルのパディング（input_idsと同じ）
+    label_features = [{'input_ids': f['input_ids']} for f in features]
+    labels_batch = tokenizer.text_tokenizer.pad(
+        label_features,
+        padding=True,
+        max_length=None,
+        return_tensors="pt"
+    )
+
+    if all_context_is_pad:
+        # バッチ内のコンテキストがすべてpadトークンなら
+        # context_input_ids, context_attention_mask を消す
+        batch = {
+            'input_ids': text_batch['input_ids'],
+            'attention_mask': text_batch['attention_mask'],
+            'labels': labels_batch['input_ids']
+        }
+    else:
+        # バッチ内の一部だけ pad なら、該当サンプルだけ attention_mask=0 にするなどの対応を行う
+        # （すべては消さず、通常通り context を残す場合の例）
+        is_all_padding_sample = (context_batch['input_ids'] == pad_token_id).all(dim=1)
+        context_batch['attention_mask'][is_all_padding_sample] = 0
+        
+        batch = {
+            'context_input_ids': context_batch['input_ids'],
+            'context_attention_mask': context_batch['attention_mask'],
+            'input_ids': text_batch['input_ids'],
+            'attention_mask': text_batch['attention_mask'],
+            'labels': labels_batch['input_ids']
+        }
+
     return batch
 
 
