@@ -294,9 +294,11 @@ def preprocess_and_tokenize(dataset, desc_prefix):
 if phase == 2:
     train_data_ja = preprocess_and_tokenize(train_data_ja, "train_data_ja")
     val_data_ja = preprocess_and_tokenize(val_data_ja, "val_data_ja")
+    train_data_ja, val_data_ja = move_random_samples(val_data_ja, train_data_ja, num_samples=50)
 
     train_data_en = preprocess_and_tokenize(train_data_en, "train_data_en")
     val_data_en = preprocess_and_tokenize(val_data_en, "val_data_en")
+    train_data_en, val_data_en = move_random_samples(val_data_en, train_data_en, num_samples=510)
 
     print("[INFO] Text-only data preprocessing and tokenization completed.")
 
