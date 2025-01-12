@@ -3,9 +3,9 @@ from c_cubed_src.building_c_cubed import CcubedModelBuilder, CcubedTokenizerBuil
 import torch
 
 builder = CcubedModelBuilder(
-            context_model_name="Qwen/Qwen2-0.5B",
-            text_model_name="meta-llama/Llama-3.1-8B-Instruct",
-            output_path="./co_model",
+            context_model_name="Qwen/Qwen2.5-0.5B",
+            text_model_name="Qwen/Qwen2.5-7B-Instruct",
+            output_path="./c_cubed",
             auth_token="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"
 )
 
@@ -19,8 +19,8 @@ tokenizer_builder = CcubedTokenizerBuilder(
 """
 
 builder.build_and_save_model(
-    start_of_context_token_id=128002,
-    end_of_context_token_id=128003
+    start_of_context_token_id=151665,
+    end_of_context_token_id=151666
 )
 """
 tokenizer_builder.build_and_save_tokenizer()
