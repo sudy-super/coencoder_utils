@@ -1,33 +1,33 @@
 # coding=utf-8
-"""CoEncoder model builder"""
+"""Ccubed model builder"""
 
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig
 from transformers.utils import is_flash_attn_2_available
 
-from .modeling_co_encoder import (
-    CoEncoderForConditionalGeneration, 
-    CoEncoderConfig, 
-    CoEncoderContextLanguageConnector,
-    CoEncoderContextTower
+from .modeling_c_cubed import (
+    CcubedForConditionalGeneration, 
+    CcubedConfig, 
+    CcubedContextLanguageConnector,
+    CcubedContextTower
 )
 
 
 import torch
 import os
 
-class CoEncoderTokenizerBuilder:
+class CcubedTokenizerBuilder:
     """
-    A class to build and save a CoEncoder tokenizer from separate LLM modules.
+    A class to build and save a Ccubed tokenizer from separate LLM modules.
     """
 
     def __init__(self, context_model_name, text_model_name, output_path, auth_token=None):
         """
-        Initialize the CoEncoderTokenizerBuilder.
+        Initialize the CcubedTokenizerBuilder.
 
         Args:
             context_model_name (str): The name or path of the context LLM.
             text_model_name (str): The name or path of the text LLM.
-            output_path (str): The path to save the CoEncoder tokenizer.
+            output_path (str): The path to save the Ccubed tokenizer.
         """
         self.context_model_name = context_model_name
         self.text_model_name = text_model_name
@@ -36,7 +36,7 @@ class CoEncoderTokenizerBuilder:
     
     def build_and_save_tokenizer(self):
         """
-        Build the CoEncoder tokenizer from separate LLMs and save it.
+        Build the Ccubed tokenizer from separate LLMs and save it.
         """
         # Load the separate models
         try:
@@ -68,21 +68,21 @@ class CoEncoderTokenizerBuilder:
         context_tokenizer.save_pretrained(self.output_path + "/context_tokenizer")
         text_tokenizer.save_pretrained(self.output_path + "/text_tokenizer")
 
-        print(f"CoEncoder tokenizer saved to {self.output_path}")
+        print(f"Ccubed tokenizer saved to {self.output_path}")
 
-class CoEncoderModelBuilder:
+class CcubedModelBuilder:
     """
-    A class to build and save a CoEncoder model from separate LLM modules.
+    A class to build and save a Ccubed model from separate LLM modules.
     """
 
     def __init__(self, context_model_name, text_model_name, output_path, auth_token=None):
         """
-        Initialize the CoEncoderModelBuilder.
+        Initialize the CcubedModelBuilder.
 
         Args:
             context_model_name (str): The name or path of the context LLM.
             text_model_name (str): The name or path of the text LLM.
-            output_path (str): The path to save the combined CoEncoder model.
+            output_path (str): The path to save the combined Ccubed model.
         """
         self.context_model_name = context_model_name
         self.text_model_name = text_model_name
@@ -99,7 +99,7 @@ class CoEncoderModelBuilder:
         end_of_context_token_id=None
     ):
         """
-        Build the CoEncoder model from separate LLMs and save it.
+        Build the Ccubed model from separate LLMs and save it.
         """
         # Load the separate models
         context_model = AutoModelForCausalLM.from_pretrained(
@@ -119,8 +119,8 @@ class CoEncoderModelBuilder:
             use_auth_token=self.auth_token if self.auth_token is not None else None
         )
 
-        # Create CoEncoder config
-        config = CoEncoderConfig(
+        # Create Ccubed config
+        config = CcubedConfig(
             context_config=context_model.config,
             text_config=text_model.config,
             ignore_index=ignore_index,
@@ -132,8 +132,8 @@ class CoEncoderModelBuilder:
             torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float16
         )
 
-        # Initialize CoEncoder model
-        co_encoder_model = CoEncoderForConditionalGeneration(config)
+        # Initialize Ccubed model
+        co_encoder_model = CcubedForConditionalGeneration(config)
 
         # Load state dict for context tower
         co_encoder_model.context_tower.tower.load_state_dict(context_model.state_dict())
@@ -141,35 +141,35 @@ class CoEncoderModelBuilder:
         # Load state dict for language model
         co_encoder_model.language_model.load_state_dict(text_model.state_dict())
 
-        # The connector is already initialized in the CoEncoderForConditionalGeneration constructor
+        # The connector is already initialized in the CcubedForConditionalGeneration constructor
 
         # Save the combined model
         co_encoder_model.save_pretrained(self.output_path, max_shard_size="10GB")
         # config.save_pretrained(self.output_path)
 
-        print(f"CoEncoder model saved to {self.output_path}")
+        print(f"Ccubed model saved to {self.output_path}")
 
     @classmethod
     def from_pretrained(cls, model_path):
         """
-        Load a pre-built CoEncoder model.
+        Load a pre-built Ccubed model.
 
         Args:
-            model_path (str): Path to the saved CoEncoder model.
+            model_path (str): Path to the saved Ccubed model.
 
         Returns:
-            CoEncoderForConditionalGeneration: The loaded CoEncoder model.
+            CcubedForConditionalGeneration: The loaded Ccubed model.
         """
-        config = CoEncoderConfig.from_pretrained(model_path)
-        model = CoEncoderForConditionalGeneration.from_pretrained(model_path, config=config)
+        config = CcubedConfig.from_pretrained(model_path)
+        model = CcubedForConditionalGeneration.from_pretrained(model_path, config=config)
         return model
 
 # Usage example:
-# builder = CoEncoderModelBuilder("bert-base-uncased", "gpt2", "./co_encoder_model")
+# builder = CcubedModelBuilder("bert-base-uncased", "gpt2", "./co_encoder_model")
 # builder.build_and_save_model()
 
 # To load the saved model:
-# loaded_model = CoEncoderModelBuilder.from_pretrained("./co_encoder_model")
+# loaded_model = CcubedModelBuilder.from_pretrained("./co_encoder_model")
 
-# tokenizer_builder = CoEncoderTokenizerBuilder("bert-base-uncased", "gpt2", "./co_encoder_model")
+# tokenizer_builder = CcubedTokenizerBuilder("bert-base-uncased", "gpt2", "./co_encoder_model")
 # tokenizer_builder.build_and_save_tokenizer()

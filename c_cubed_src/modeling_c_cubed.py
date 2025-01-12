@@ -1,5 +1,5 @@
 # coding=utf-8
-"""PyTorch CoEncoder model."""
+"""PyTorch Ccubed model."""
 
 import math
 from dataclasses import dataclass
@@ -24,12 +24,12 @@ from transformers.utils import (
     is_flash_attn_greater_or_equal_2_10
 )
 from transformers import AutoTokenizer, AutoModel, AutoModelForCausalLM
-from .configuration_co_encoder import CoEncoderConfig
+from .configuration_c_cubed import CcubedConfig
 
 
 logger = logging.get_logger(__name__)
 
-_CONFIG_FOR_DOC = "CoEncoderConfig"
+_CONFIG_FOR_DOC = "CcubedConfig"
 
 
 def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
@@ -45,9 +45,9 @@ def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
 
 
 @dataclass
-class CoEncoderCausalLMOutputWithPast(ModelOutput):
+class CcubedCausalLMOutputWithPast(ModelOutput):
     """
-    Base class for CoEncoder causal language model (or autoregressive) outputs.
+    Base class for Ccubed causal language model (or autoregressive) outputs.
 
     Args:
         loss (`torch.FloatTensor` of shape `(1,)`, *optional*, returned when `labels` is provided):
@@ -84,13 +84,13 @@ class CoEncoderCausalLMOutputWithPast(ModelOutput):
     context_hidden_states: Optional[torch.FloatTensor] = None
 
 
-class CoEncoderDynamicAttention(nn.Module):
+class CcubedDynamicAttention(nn.Module):
     """
     Attention mechanism adapted for dynamic output size based on Mistral's architecture. This attention layer computes
     the output attention scores which are used to determine the pooling size dynamically.
     """
 
-    def __init__(self, config: CoEncoderConfig):
+    def __init__(self, config: CcubedConfig):
         super().__init__()
 
         self.hidden_size = config.context_config.hidden_size
@@ -107,8 +107,9 @@ class CoEncoderDynamicAttention(nn.Module):
 
     def forward(
         self,
-        hidden_states,
-        output_attentions=False,
+        hidden_states: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        output_attentions: bool = False,
     ):
         # Get input dimensions
         bsz, seq_len, hidden_size = hidden_states.size()
@@ -149,8 +150,8 @@ class CoEncoderDynamicAttention(nn.Module):
         return attn_output, attn_weights
 
 
-class CoEncoderDynamicFlashAttention2(CoEncoderDynamicAttention):
-    def __init__(self, config: CoEncoderConfig):
+class CcubedDynamicFlashAttention2(CcubedDynamicAttention):
+    def __init__(self, config: CcubedConfig):
         super().__init__(config)
         self._flash_attn_uses_top_left_mask = not is_flash_attn_greater_or_equal_2_10()
         self.is_causal = False  # Assuming non-causal attention for this context
@@ -158,8 +159,9 @@ class CoEncoderDynamicFlashAttention2(CoEncoderDynamicAttention):
 
     def forward(
         self,
-        hidden_states,
-        output_attentions=False,
+        hidden_states: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        output_attentions: bool = False,
     ):
         output_attentions = False
 
@@ -198,8 +200,9 @@ class CoEncoderDynamicFlashAttention2(CoEncoderDynamicAttention):
             key_states = key_states.to(target_dtype)
             value_states = value_states.to(target_dtype)
 
-        # Define attention_mask (assuming all positions are valid)
-        attention_mask = None  # Since we have no padding tokens or specific masking
+        # Define attention_mask assuming all positions are valid
+        # because flash_attn does not support custom attention_mask
+        attention_mask = None
 
         # Define other required variables
         position_ids = None
@@ -227,7 +230,7 @@ class CoEncoderDynamicFlashAttention2(CoEncoderDynamicAttention):
         return attn_output, attn_weights
 
 
-class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
+class CcubedDynamicWeightedAvgPool1d(nn.Module):
     """
     A module that dynamically determines the output size based on input
     and performs weighted average pooling with separate attention mechanisms
@@ -236,16 +239,16 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
     def __init__(self, config, output_size_min=32, output_size_max=131072):
         super().__init__()
         # Attention mechanism for estimating output size
-        self.size_estimation_attention = CoEncoderDynamicFlashAttention2(config)
+        self.size_estimation_attention = CcubedDynamicFlashAttention2(config)
         # Attention mechanism for weighted pooling
-        self.weighted_pooling_attention = CoEncoderDynamicFlashAttention2(config)
+        self.weighted_pooling_attention = CcubedDynamicFlashAttention2(config)
         self.output_size_min = output_size_min
         self.output_size_max = (
             config.context_config.max_position_embeddings if config.context_config.max_position_embeddings is not None else output_size_max
         )
         self.scale_param = nn.Parameter(torch.tensor(0.01))
 
-    def forward(self, hidden_states):
+    def forward(self, hidden_states, context_attention_mask=None):
         """
         Args:
             x: Input tensor of shape (batch_size, seq_len, hidden_size)
@@ -273,7 +276,6 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
             (scaled_batch_means * (self.output_size_max - self.output_size_min)) + self.output_size_min
         ).int().squeeze(-1)
 
-        # Get the maximum output size across the batch
         max_pooled_len = dynamic_output_sizes.max().item()
 
         # Compute attention weights for weighted pooling
@@ -283,19 +285,30 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
         # attention_weights: (batch_size, seq_len)
         attention_weights = torch.sigmoid(attn_output_weights).squeeze(-1)
 
+        # If context_attention_mask is provided, apply it to zero out weights for invalid tokens
+        if context_attention_mask is not None:
+            attention_weights = attention_weights * context_attention_mask
+
         # Initialize output tensors
         # pooled_output: (batch_size, max_pooled_len, hidden_size)
-        pooled_output = torch.zeros(batch_size, max_pooled_len, hidden_size, device=device, dtype=hidden_states.dtype)
+        pooled_output = torch.zeros(
+            batch_size, max_pooled_len, hidden_size, 
+            device=device, dtype=hidden_states.dtype
+        )
         # attention_mask: (batch_size, max_pooled_len)
-        attention_mask = torch.zeros(batch_size, max_pooled_len, dtype=torch.bool, device=device)
+        attention_mask = torch.zeros(
+            batch_size, max_pooled_len, 
+            dtype=torch.bool, device=device
+        )
 
         for batch_idx in range(batch_size):
             output_size = dynamic_output_sizes[batch_idx].item()
             item_input = hidden_states[batch_idx]  # Shape: (seq_len, hidden_size)
             item_weights = attention_weights[batch_idx]  # Shape: (seq_len)
-
+   
             # Perform weighted pooling
             pooled_values = []
+            batch_attn_mask = torch.zeros(output_size, dtype=torch.bool, device=device)
             # Split the sequence evenly
             intervals = torch.linspace(0, seq_len, steps=output_size + 1).long()
             for i in range(output_size):
@@ -310,21 +323,24 @@ class CoEncoderDynamicWeightedAvgPool1d(nn.Module):
                     # Calculate weighted average
                     weighted_input = chunk_input * chunk_weights.unsqueeze(-1)  # Shape: (chunk_size, hidden_size)
                     pooled_value = weighted_input.sum(dim=0) / (chunk_weights.sum() + 1e-8)  # Shape: (hidden_size)
+                    batch_attn_mask[i] = True
                 pooled_values.append(pooled_value)
-            # Convert the result to a tensor
-            pooled_values = torch.stack(pooled_values)  # Shape: (output_size, hidden_size)
-            # Store the result
-            pooled_output[batch_idx, -output_size:] = pooled_values.squeeze(0)
-            attention_mask[batch_idx, -output_size:] = True
+
+            if pooled_values:  # Only stack if there are values
+                # Convert the result to a tensor
+                pooled_values = torch.stack(pooled_values)  # Shape: (output_size, hidden_size)
+                # Store the result
+                pooled_output[batch_idx, -output_size:] = pooled_values
+                attention_mask[batch_idx, -output_size:] = batch_attn_mask
 
         return pooled_output, attention_mask, dynamic_output_sizes
 
 
-class CoEncoderContextLanguageConnector(nn.Module):
-    def __init__(self, config: CoEncoderConfig):
+class CcubedContextLanguageConnector(nn.Module):
+    def __init__(self, config: CcubedConfig):
         super().__init__()
 
-        self.dynamic_pooling = CoEncoderDynamicWeightedAvgPool1d(config)
+        self.dynamic_pooling = CcubedDynamicWeightedAvgPool1d(config)
 
         self.linear_1 = nn.Linear(
             config.context_config.hidden_size,
@@ -344,7 +360,6 @@ class CoEncoderContextLanguageConnector(nn.Module):
         pooled_output, attention_mask, dynamic_output_sizes = self.dynamic_pooling(
             hidden_states=context_features
         )
-        # pooled_output: [batch_size, max_pooled_len, hidden_size]
 
         hidden_states = self.linear_1(pooled_output)
         hidden_states = self.act(hidden_states)
@@ -353,8 +368,8 @@ class CoEncoderContextLanguageConnector(nn.Module):
         return hidden_states, attention_mask
 
 
-class CoEncoderContextTower(nn.Module):
-    def __init__(self, config: CoEncoderConfig):
+class CcubedContextTower(nn.Module):
+    def __init__(self, config: CcubedConfig):
         super().__init__()
 
         self.tower = AutoModelForCausalLM.from_config(
@@ -378,16 +393,16 @@ class CoEncoderContextTower(nn.Module):
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
             output_hidden_states=True
-        )     
+        )
         features = self.feature_select(outputs)
         return features
     
 
-class CoEncoderPreTrainedModel(PreTrainedModel):
-    config_class = CoEncoderConfig
+class CcubedPreTrainedModel(PreTrainedModel):
+    config_class = CcubedConfig
     base_model_prefix = "model"
     supports_gradient_checkpointing = True
-    _no_split_modules = [] # ["CoEncoderContextLanguageConnector", "CoEncoderContextTower"]
+    _no_split_modules = [] # ["CcubedContextLanguageConnector", "CcubedContextTower"]
     _skip_keys_device_placement = ["past_key_values"]
     _supports_flash_attn_2 = True
     _supports_sdpa = True
@@ -411,11 +426,11 @@ class CoEncoderPreTrainedModel(PreTrainedModel):
                 module.weight.data[module.padding_idx].zero_()
 
 
-class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
-    def __init__(self, config: CoEncoderConfig):
+class CcubedForConditionalGeneration(CcubedPreTrainedModel):
+    def __init__(self, config: CcubedConfig):
         super().__init__(config)
-        self.context_tower = CoEncoderContextTower(config)
-        self.connector = CoEncoderContextLanguageConnector(config)
+        self.context_tower = CcubedContextTower(config)
+        self.connector = CcubedContextLanguageConnector(config)
 
         self.language_model = AutoModelForCausalLM.from_config(
             config.text_config,
@@ -431,24 +446,45 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
     
     def get_input_embeddings(self):
         return self.language_model.get_input_embeddings()
+
+    def get_context_input_embeddings(self):
+        return self.context_tower.tower.get_input_embeddings()
     
     def set_input_embeddings(self, value):
         self.language_model.set_input_embeddings(value)
 
+    def set_context_input_embeddings(self, value):
+        self.context_tower.tower.set_input_embeddings(value)
+
     def get_output_embeddings(self):
         return self.language_model.get_output_embeddings()
     
+    def get_context_output_embeddings(self):
+        return self.context_tower.tower.get_output_embeddings()
+    
     def set_output_embeddings(self, new_embeddings):
         self.language_model.set_output_embeddings(new_embeddings)
+
+    def set_context_output_embeddings(self, new_embeddings):
+        self.context_tower.tower.set_output_embeddings(new_embeddings)
     
     def set_decoder(self, decoder):
         self.language_model.set_decoder(decoder)
+
+    def set_context_encoder(self, decoder):
+        self.context_tower.tower.set_decoder(decoder)
     
     def get_decoder(self):
         return self.language_model.get_decoder()
+
+    def get_context_encoder(self):
+        return self.context_tower.tower.get_decoder()
     
     def tie_weights(self):
         return self.language_model.tie_weights()
+    
+    def context_tie_weights(self):
+        return self.context_tower.tower.tie_weights()
     
     def resize_token_embeddings(self, new_num_tokens: Optional[int] = None, pad_to_multiple_of=None) -> nn.Embedding:
         model_embeds = self.language_model.resize_token_embeddings(new_num_tokens, pad_to_multiple_of)
@@ -459,14 +495,16 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
     
     def _merge_context_features(
         self,
-        context_features,
-        inputs_embeds,
-        input_ids,
-        attention_mask,
+        context_features = None,
+        inputs_embeds = None,
+        attention_mask = None,
+        context_attention_mask=None,
         position_ids=None,
         labels=None,
-        context_attention_mask=None,
     ):
+        if context_features is None:
+            return inputs_embeds, attention_mask, position_ids, labels
+
         batch_size, seq_length, embed_dim = inputs_embeds.shape
         context_seq_len = context_features.size(1)
         
@@ -541,7 +579,7 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
         
         # Create new position_ids
         total_seq_len = new_inputs_embeds.size(1)
-        new_position_ids = torch.arange(total_seq_len, device=input_ids.device).unsqueeze(0).expand(batch_size, -1)
+        new_position_ids = torch.arange(total_seq_len, device=inputs_embeds.device).unsqueeze(0).expand(batch_size, -1)
         
         # Update labels if provided
         if labels is not None:
@@ -554,11 +592,11 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
         return new_inputs_embeds, new_attention_mask, new_position_ids, new_labels
 
 
-    @replace_return_docstrings(output_type=CoEncoderCausalLMOutputWithPast, config_class=_CONFIG_FOR_DOC)
+    @replace_return_docstrings(output_type=CcubedCausalLMOutputWithPast, config_class=_CONFIG_FOR_DOC)
     def forward(
         self,
-        context_inputs_embeds: Optional[torch.FloatTensor] = None,
         context_input_ids: torch.LongTensor = None,
+        context_inputs_embeds: Optional[torch.FloatTensor] = None,
         context_attention_mask: Optional[torch.Tensor] = None,
         input_ids: torch.LongTensor = None,
         inputs_embeds: Optional[torch.FloatTensor] = None,
@@ -572,25 +610,31 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
         return_dict: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
         num_logits_to_keep: int = 0,
-    ) -> Union[Tuple, CoEncoderCausalLMOutputWithPast]:
+    ) -> Union[Tuple, CcubedCausalLMOutputWithPast]:
         """
-        Perform a forward pass through the CoEncoder model, optionally conditioning on context input.
+        Perform a forward pass through the Ccubed model, optionally conditioning on context input.
 
         Args:
-            input_ids (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
-                Token IDs of the input sequence.
             context_input_ids (`torch.LongTensor` of shape `(batch_size, context_sequence_length)`, *optional*):
                 Token IDs of the context input sequence.
+            context_inputs_embeds (`torch.FloatTensor` of shape `(batch_size, context_sequence_length, hidden_size)`, *optional*):
+                Pre-computed context embeddings. If provided, will not compute embeddings from context_input_ids.
+            context_attention_mask (`torch.Tensor` of shape `(batch_size, context_sequence_length)`, *optional*):
+                Attention mask for context input sequence.
+            input_ids (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
+                Token IDs of the input sequence.
+            inputs_embeds (`torch.FloatTensor` of shape `(batch_size, sequence_length, hidden_size)`, *optional*):
+                Optionally, instead of passing `input_ids`, you can pass an embedded representation directly.
             attention_mask (`torch.Tensor` of shape `(batch_size, sequence_length)`, *optional*):
                 Mask to avoid performing attention on padding token indices.
             position_ids (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
                 Indices of positions of each input sequence token.
             past_key_values (`List[torch.FloatTensor]`, *optional*):
                 Pre-computed hidden-states (key and value tensors) that can be used to speed up sequential decoding.
-            inputs_embeds (`torch.FloatTensor` of shape `(batch_size, sequence_length, hidden_size)`, *optional*):
-                Optionally, instead of passing `input_ids`, you can pass an embedded representation directly.
             labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
-                Labels for computing the language modeling loss.
+                Labels for computing the masked language modeling loss. Indices should either be in `[0, ...,
+                config.vocab_size]` or -100 (see `input_ids` docstring). Tokens with indices set to `-100` are ignored
+                (masked), the loss is only computed for the tokens with labels in `[0, ..., config.vocab_size]`.
             use_cache (`bool`, *optional*):
                 If `True`, past key values will be used to speed up decoding.
             output_attentions (`bool`, *optional*):
@@ -598,10 +642,21 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
             output_hidden_states (`bool`, *optional*):
                 If `True`, return the hidden states of all layers.
             return_dict (`bool`, *optional*):
-                If `True`, return a `CoEncoderCausalLMOutputWithPast` instead of a plain tuple.
+                If `True`, return a `CcubedCausalLMOutputWithPast` instead of a plain tuple.
+            num_logits_to_keep (`int`, *optional*):
+                Calculate logits for the last `num_logits_to_keep` tokens. If `0`, calculate logits for all
+                `input_ids` (special case). Only last token logits are needed for generation, and calculating them only for that
+                token can save memory, which becomes pretty significant for long sequences or large vocabulary size.
 
         Returns:
-            `Union[Tuple, CoEncoderCausalLMOutputWithPast]`: A tuple containing various model outputs or a `CoEncoderCausalLMOutputWithPast` instance.
+            `Union[Tuple, CcubedCausalLMOutputWithPast]`: A tuple containing various model outputs or a `CcubedCausalLMOutputWithPast` instance.
+                The CcubedCausalLMOutputWithPast contains the following fields:
+                    - loss (`torch.FloatTensor`, *optional*): Language modeling loss if labels provided, None otherwise.
+                    - logits (`torch.FloatTensor` of shape `(batch_size, sequence_length, vocab_size)`): Prediction scores.
+                    - past_key_values (`List[torch.FloatTensor]`, *optional*): Pre-computed hidden states for efficient decoding.
+                    - hidden_states (`Tuple[torch.FloatTensor]`, *optional*): Layer hidden states if output_hidden_states=True.
+                    - attentions (`Tuple[torch.FloatTensor]`, *optional*): Layer attention weights if output_attentions=True.
+                    - context_hidden_states (`torch.FloatTensor`, *optional*): Final hidden states from the context tower.
         """
 
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
@@ -609,6 +664,7 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
         )
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+
 
         all_inputs_none = (
             input_ids is None and 
@@ -620,7 +676,7 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
         if all_inputs_none:
             raise ValueError("You must provide either non-empty input_ids/inputs_embeds or context_input_ids/context_inputs_embeds.")
 
-        # Process context input through ContextTower
+
         if context_input_ids is not None or context_inputs_embeds is not None:
             context_features = self.context_tower(
                 input_ids=context_input_ids,
@@ -634,18 +690,18 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
             context_features = None
             context_attention_mask = None
 
-        if inputs_embeds is None:
+
+        if inputs_embeds is None and input_ids is not None:
             inputs_embeds = self.get_input_embeddings()(input_ids)
 
-        if context_features is not None:
+        if inputs_embeds is not None:
             inputs_embeds, attention_mask, position_ids, labels = self._merge_context_features(
-                context_features,
-                inputs_embeds,
-                input_ids,
-                attention_mask,
-                position_ids,
-                labels,
+                context_features=context_features,
+                inputs_embeds=inputs_embeds,
+                attention_mask=attention_mask,
                 context_attention_mask=context_attention_mask,
+                position_ids=position_ids,
+                labels=labels,
             )
         else:
             inputs_embeds = context_features
@@ -671,13 +727,13 @@ class CoEncoderForConditionalGeneration(CoEncoderPreTrainedModel):
             shift_logits = logits[..., :-1, :].contiguous()
             shift_labels = labels[..., 1:].contiguous()
             loss_fct = nn.CrossEntropyLoss(ignore_index=self.ignore_index)
-            loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+            loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1).to(shift_logits.device))
 
         if not return_dict:
             output = (logits,) + outputs[1:]
             return (loss,) + output if loss is not None else output
 
-        return CoEncoderCausalLMOutputWithPast(
+        return CcubedCausalLMOutputWithPast(
             loss=loss,
             logits=logits,
             past_key_values=outputs.past_key_values,

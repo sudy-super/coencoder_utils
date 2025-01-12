@@ -6,10 +6,10 @@ from datasets import load_dataset
 import wandb
 from safetensors.torch import load_file
 
-# CoEncoderモデルとトークナイザーのインポート
+# Ccubedモデルとトークナイザーのインポート
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from coencoder_src.modeling_co_encoder import CoEncoderForConditionalGeneration
-from coencoder_src.tokenization_co_encoder import CoEncoderDualTokenizer
+from c_cubed_src.modeling_c_cubed import CcubedForConditionalGeneration
+from c_cubed_src.tokenization_c_cubed import CcubedDualTokenizer
 
 from accelerate import infer_auto_device_map, dispatch_model
 import os
@@ -51,12 +51,12 @@ else:
 
 # CoEncoderトークナイザーとモデルの読み込み
 try:
-    tokenizer = CoEncoderDualTokenizer.from_pretrained("./co_model_debug", trust_remote_code=True, use_fast=False)
+    tokenizer = CcubedDualTokenizer.from_pretrained("./co_model_debug", trust_remote_code=True, use_fast=False)
 except:
     print("[INFO] Failed to load tokenizer with use_fast=False. Retrying with use_fast=True.")
-    tokenizer = CoEncoderDualTokenizer.from_pretrained("./co_model", trust_remote_code=True)
+    tokenizer = CcubedDualTokenizer.from_pretrained("./co_model", trust_remote_code=True)
 
-model = CoEncoderForConditionalGeneration.from_pretrained(
+model = CcubedForConditionalGeneration.from_pretrained(
     model_name,
     torch_dtype=torch.bfloat16,
     trust_remote_code=True,

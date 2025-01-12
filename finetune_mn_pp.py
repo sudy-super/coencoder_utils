@@ -5,8 +5,8 @@ import torch
 from datasets import load_dataset, concatenate_datasets, Dataset
 import wandb
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from coencoder_src.modeling_co_encoder import CoEncoderForConditionalGeneration
-from coencoder_src.tokenization_co_encoder import CoEncoderDualTokenizer
+from c_cubed_src.modeling_c_cubed import CcubedForConditionalGeneration
+from c_cubed_src.tokenization_c_cubed import CcubedDualTokenizer
 import os
 import psutil
 import subprocess
@@ -194,7 +194,7 @@ class NetworkMonitor:
     def stop(self):
         self.running = False
 
-class CoEncoderPipeline(PipelineModule):
+class CcubedPipeline(PipelineModule):
     def __init__(self, base_model, num_stages=32):
         stages = []
         
@@ -336,11 +336,11 @@ class DeepSpeedPipelineTrainer(Trainer):
 model_name = "sudy-super/coencoder_test2"
 
 # トークナイザーの読み込み
-tokenizer = CoEncoderDualTokenizer.from_pretrained("co_model", trust_remote_code=True)
+tokenizer = CcubedDualTokenizer.from_pretrained("co_model", trust_remote_code=True)
 tokenizer.text_tokenizer.pad_token = tokenizer.text_tokenizer.eos_token
 
 # ベースモデルの読み込み
-base_model = CoEncoderForConditionalGeneration.from_pretrained(
+base_model = CcubedForConditionalGeneration.from_pretrained(
     model_name,
     torch_dtype=torch.bfloat16,
     trust_remote_code=True,
@@ -348,7 +348,7 @@ base_model = CoEncoderForConditionalGeneration.from_pretrained(
 )
 
 # データセットの読み込み
-dataset = load_dataset("sudy-super/coencoder_data")
+dataset = load_dataset("sudy-super/Ccubed_data")
 
 # データセットの取得と前処理
 train_data = dataset["train"]
@@ -454,7 +454,7 @@ ds_config = {
 
 
 # パイプラインモデルの作成と初期化
-model = CoEncoderPipeline(base_model, num_stages=32)
+model = CcubedPipeline(base_model, num_stages=32)
 
 # パラメータの凍結
 for name, param in model.named_parameters():

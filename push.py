@@ -1,6 +1,6 @@
-from coencoder_src.modeling_co_encoder import CoEncoderForConditionalGeneration
-from coencoder_src.configuration_co_encoder import CoEncoderConfig
-from coencoder_src.tokenization_co_encoder import CoEncoderDualTokenizer
+from c_cubed_src.modeling_c_cubed import CoEncoderForConditionalGeneration
+from c_cubed_src.configuration_c_cubed import CoEncoderConfig
+from c_cubed_src.tokenization_c_cubed import CoEncoderDualTokenizer
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 

@@ -1,5 +1,5 @@
 # coding=utf-8
-"""Tokenization classes for CoEncoder"""
+"""Tokenization classes for Ccubed"""
 
 import os
 import json
@@ -12,9 +12,9 @@ from transformers.feature_extraction_utils import BatchFeature
 
 logger = logging.get_logger(__name__)
 
-class CoEncoderDualTokenizer(ProcessorMixin):
+class CcubedDualTokenizer(ProcessorMixin):
     r"""
-    CoEncoderDualTokenizer is tokenizer for the CoEncoder model. It processes context and main text.
+    CcubedDualTokenizer is tokenizer for the Ccubed model. It processes context and main text.
 
     Args:
         context_tokenizer ([`PreTrainedTokenizer`]):
@@ -39,7 +39,7 @@ class CoEncoderDualTokenizer(ProcessorMixin):
             pretrained_model_name_or_path (str): The name or path of the Hugging Face repository.
 
         Returns:
-            CoEncoderDualTokenizer: An instance of the tokenizer class.
+            CcubedDualTokenizer: An instance of the tokenizer class.
         """
         # Load context_tokenizer from 'context_tokenizer' directory
         context_tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path,
@@ -53,7 +53,7 @@ class CoEncoderDualTokenizer(ProcessorMixin):
                                                        **kwargs
         )
 
-        # Return a new instance of CoEncoderDualTokenizer with both tokenizers loaded
+        # Return a new instance of CcubedDualTokenizer with both tokenizers loaded
         return cls(context_tokenizer=context_tokenizer, text_tokenizer=text_tokenizer)
 
     def save_pretrained(self, save_directory: str, **kwargs):
@@ -87,7 +87,7 @@ class CoEncoderDualTokenizer(ProcessorMixin):
         **kwargs
     ) -> BatchFeature:
         """
-        Main method to prepare inputs for the CoEncoder model.
+        Main method to prepare inputs for the Ccubed model.
 
         Args:
             context: Context text input.

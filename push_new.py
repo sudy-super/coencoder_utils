@@ -1,22 +1,22 @@
-from coencoder_src.modeling_co_encoder import CoEncoderForConditionalGeneration
-from coencoder_src.configuration_co_encoder import CoEncoderConfig
-from coencoder_src.tokenization_co_encoder import CoEncoderDualTokenizer
+from c_cubed_src.modeling_c_cubed import CcubedForConditionalGeneration
+from c_cubed_src.configuration_c_cubed import CcubedConfig
+from c_cubed_src.tokenization_c_cubed import CcubedDualTokenizer
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 from huggingface_hub import HfApi, HfFolder
 import os
 
-CoEncoderConfig.register_for_auto_class("AutoConfig")
-CoEncoderForConditionalGeneration.register_for_auto_class("AutoModelForCausalLM")
-CoEncoderDualTokenizer.register_for_auto_class("AutoTokenizer")
+CcubedConfig.register_for_auto_class("AutoConfig")
+CcubedForConditionalGeneration.register_for_auto_class("AutoModelForCausalLM")
+CcubedDualTokenizer.register_for_auto_class("AutoTokenizer")
 
-tokenizer = CoEncoderDualTokenizer.from_pretrained("./co_model", trust_remote_code=True)
+tokenizer = CcubedDualTokenizer.from_pretrained("./co_model", trust_remote_code=True)
 
-model = CoEncoderForConditionalGeneration.from_pretrained("./co_output_model", torch_dtype=torch.bfloat16, trust_remote_code=True)
+model = CcubedForConditionalGeneration.from_pretrained("./co_output_model", torch_dtype=torch.bfloat16, trust_remote_code=True)
 
 """
 # カスタムトークナイザを作成
-tokenizer = CoEncoderDualTokenizer(
+tokenizer = CcubedDualTokenizer(
     context_tokenizer=context_tokenizer,
     text_tokenizer=text_tokenizer
 )
@@ -33,7 +33,7 @@ model.save_pretrained(model_dir)
 tokenizer.save_pretrained(model_dir)
 
 # カスタムトークナイゼーションファイルをモデルディレクトリにコピー
-# 'tokenization_coencoder.py'を'model_dir'に保存してください
+# 'tokenization_Ccubed.py'を'model_dir'に保存してください
 
 # 3. Hugging Face Hubにプッシュ
 

@@ -1,8 +1,8 @@
-from coencoder_src.building_co_encoder import CoEncoderModelBuilder, CoEncoderTokenizerBuilder
+from c_cubed_src.building_c_cubed import CcubedModelBuilder, CcubedTokenizerBuilder
 
 import torch
 
-builder = CoEncoderModelBuilder(
+builder = CcubedModelBuilder(
             context_model_name="Qwen/Qwen2-0.5B",
             text_model_name="meta-llama/Llama-3.1-8B-Instruct",
             output_path="./co_model",
@@ -10,7 +10,7 @@ builder = CoEncoderModelBuilder(
 )
 
 """
-tokenizer_builder = CoEncoderTokenizerBuilder(
+tokenizer_builder = CcubedTokenizerBuilder(
             context_model_name="Qwen/Qwen2-0.5B",
             text_model_name="meta-llama/Llama-3.1-8B-Instruct",
             output_path="./co_model",
