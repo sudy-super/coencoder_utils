@@ -21,7 +21,7 @@ import time
 import psutil
 from datetime import datetime
 
-#import torch.distributed as dist
+import torch.distributed as dist
 
 phase = 1
 
@@ -29,7 +29,7 @@ phase = 1
 #dist.init_process_group(backend='nccl')  # 必要に応じてバックエンドを指定
 
 # グローバルランク0のプロセスのみでWandBを初期化
-"""
+
 if dist.get_rank() == 0:
     if phase == 1:
         wandb.init(project="c_cubed_phase1", name="1e-3_c_cubed_connector", entity="sudy_super")
@@ -37,7 +37,7 @@ if dist.get_rank() == 0:
         wandb.init(project="c_cubed_phase2", name="2e-5_c_cubed_lm", entity="sudy_super")
     else:
         raise ValueError("Invalid phase value. Must be 1 or 2.")
-"""
+
 
 torch.manual_seed(42)
 torch.cuda.manual_seed(42)
