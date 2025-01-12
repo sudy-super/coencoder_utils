@@ -23,7 +23,7 @@ from datetime import datetime
 
 #import torch.distributed as dist
 
-phase = 2
+phase = 1
 
 # DeepSpeedがtorch.distributedの初期化を行うため、その後でランクを取得します
 #dist.init_process_group(backend='nccl')  # 必要に応じてバックエンドを指定
@@ -32,9 +32,9 @@ phase = 2
 """
 if dist.get_rank() == 0:
     if phase == 1:
-        wandb.init(project="coencoder_finetune_mn", name="1e-3_coencoder_connector", entity="sudy_super")
+        wandb.init(project="c_cubed_phase1", name="1e-3_c_cubed_connector", entity="sudy_super")
     elif phase == 2:
-        wandb.init(project="coencoder_finetune_mn", name="2e-5_coencoder_llm_debug", entity="sudy_super")
+        wandb.init(project="c_cubed_phase2", name="2e-5_c_cubed_lm", entity="sudy_super")
     else:
         raise ValueError("Invalid phase value. Must be 1 or 2.")
 """
@@ -45,16 +45,16 @@ torch.cuda.manual_seed(42)
 if phase == 1:
     model_name = "sudy-super/coencoder_test2"
 elif phase == 2:
-    model_name = "../coencoder_debug" # "sudy-super/coencoder_test2_phase1_2"
+    model_name = "sudy-super/coencoder_test2_phase1_2"
 else:
     raise ValueError("Invalid phase value. Must be 1 or 2.")
 
 # CoEncoderトークナイザーとモデルの読み込み
 try:
-    tokenizer = CcubedDualTokenizer.from_pretrained("./co_model_debug", trust_remote_code=True, use_fast=False)
+    tokenizer = CcubedDualTokenizer.from_pretrained("./co_model_production", trust_remote_code=True, use_fast=False)
 except:
     print("[INFO] Failed to load tokenizer with use_fast=False. Retrying with use_fast=True.")
-    tokenizer = CcubedDualTokenizer.from_pretrained("./co_model", trust_remote_code=True)
+    tokenizer = CcubedDualTokenizer.from_pretrained("./co_model_production", trust_remote_code=True)
 
 model = CcubedForConditionalGeneration.from_pretrained(
     model_name,
@@ -63,14 +63,13 @@ model = CcubedForConditionalGeneration.from_pretrained(
     attn_implementation="flash_attention_2"
 )
 
-model.model_parallel = True
 
 tokenizer.text_tokenizer.pad_token = tokenizer.text_tokenizer.eos_token
 tokenizer.context_tokenizer.pad_token = tokenizer.context_tokenizer.eos_token
 tokenizer.text_tokenizer.pad_token_id = tokenizer.text_tokenizer.eos_token_id
 tokenizer.context_tokenizer.pad_token_id = tokenizer.context_tokenizer.eos_token_id
 
-
+model.model_parallel = True
 model.gradient_checkpointing_enable()
 torch.autograd.set_detect_anomaly(True)
 
@@ -89,32 +88,32 @@ for param in model.language_model.parameters():
     else:
         raise ValueError("Invalid phase value. Must be 1 or 2.")
 
-
 for name, param in model.named_parameters():
     if param.requires_grad:
         print(f"training param - {name}: {param.shape}")
 
 
-# データセットの読み込み
-dataset = load_dataset("sudy-super/coencoder_data")
+if phase == 1:
+    # データセットの読み込み
+    dataset = load_dataset("sudy-super/c_cubed_restoration")
 
-# データセットの取得
-train_data = dataset["train"]
-val_data = dataset["validation"]
-test_data = dataset["test"]
-
-if phase == 2:
-    dataset_ja = load_dataset("sudy-super/coencoder_oasst2_ja")
-    dataset_en = load_dataset("sudy-super/coencoder_oasst2_en")
+    # データセットの取得
+    train_data = dataset["train"]
+    val_data = dataset["validation"]
+elif phase == 2:
+    dataset_long = load_dataset("sudy-super/c_cubed_finetune")
+    dataset_ja = load_dataset("sudy-super/c_cubed_oasst2_ja")
+    dataset_en = load_dataset("sudy-super/c_cubed_oasst2_en")
 
     # 各データセットのスプリットを取得
+    train_data_long = dataset_long["train"]
+    val_data_long = dataset_long["validation"]
+
     train_data_ja = dataset_ja["train"]
     val_data_ja = dataset_ja["validation"]
-    test_data_ja = dataset_ja["test"]
 
     train_data_en = dataset_en["train"]
     val_data_en = dataset_en["validation"]
-    test_data_en = dataset_en["test"]
 
     print("[INFO] Datasets loaded successfully.")
 
@@ -129,27 +128,38 @@ def generate_inputs(batch):
     for context, conversations in zip(contexts_list, conversations_list): # for context, conversations in zip(batch.get("context", [""]), batch["conversations"]):
         if not context:
             context = tokenizer.context_tokenizer.pad_token # ""  # contextがNoneまたは空の場合、空文字列に設定
-        text = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 
-Cutting Knowledge Date: December 2023
-Today Date: 9 Jan 2025
-
-<|eot_id|>"""
-        for c in conversations:
-            if c["from"] == "user":
-                text += f"""<|start_header_id|>user<|end_header_id|>
-
-{c['value']}<|eot_id|>"""
-            elif c["from"] == "assistant":
-                text += f"""<|start_header_id|>assistant<|end_header_id|>
-
-{c['value']}<|eot_id|>"""
-        text = ""
+        text = "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.<|im_end|>"
+        """
         for c in conversations:
             if c["from"] == "user":
                 text += f"<|user|>{c['value']}</s>\n"
             elif c["from"] == "assistant":
-                text += f"""<|assistant|>{c['value']}</s>"""
+                text += f"<|assistant|>{c['value']}</s>"
+        """
+        for c in conversations:
+            if c["from"] == "user":
+                text += f"\n<|im_start|>user\n{c['value']}<|im_end|>"
+            elif c["from"] == "assistant":
+                text += f"\n<|im_start|>assistant\n{c['value']}<|im_end|>"
+        contexts.append(context)
+        texts.append(text)
+    return {'context': contexts, 'text': texts}
+
+def generate_inputs_for_restoration(batch):
+    conversations_list = batch["text"]
+    contexts_list = batch["text"]
+
+    contexts = []
+    texts = []
+    for context, conversations in zip(contexts_list, conversations_list): # for context, conversations in zip(batch.get("context", [""]), batch["conversations"]):
+        if not context:
+            context = tokenizer.context_tokenizer.pad_token # ""  # contextがNoneまたは空の場合、空文字列に設定
+
+        text = "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.<|im_end|>"
+        
+        text += f"\n<|im_start|>user\nPlease repeat the input context.<|im_end|>"
+        text += f"\n<|im_start|>assistant\n{context}<|im_end|>"
         contexts.append(context)
         texts.append(text)
     return {'context': contexts, 'text': texts}
@@ -187,21 +197,15 @@ def tokenize(batch):
 
     return tokenized_outputs
 
-# データのシャッフルとフィルタリング、バッチ処理対応
-train_data = train_data.shuffle(seed=42)
-val_data = val_data.shuffle(seed=42)
-test_data = test_data.shuffle(seed=42)
-
-max_text_length = 1024
 
 def preprocess_and_tokenize_with_context(dataset, desc_prefix):
     dataset = dataset.map(
-        generate_inputs,
+        generate_inputs_for_restoration,
         batched=True,
         num_proc=8,
         desc=f"Generating inputs for {desc_prefix}",
         load_from_cache_file=True
-    ).filter(lambda x: x['text'] != '', num_proc=8).filter(lambda x: x['context'] != '', num_proc=8).filter(lambda x: x['context'] != tokenizer.context_tokenizer.pad_token * 32, num_proc=8)
+    ).filter(lambda x: x['text'] != '', num_proc=8).filter(lambda x: x['context'] != '', num_proc=8).filter(lambda x: x['context'] != tokenizer.context_tokenizer.pad_token, num_proc=8)
 
     dataset = dataset.map(
         tokenize,
@@ -214,60 +218,6 @@ def preprocess_and_tokenize_with_context(dataset, desc_prefix):
 
     dataset = dataset.filter(lambda x: x['text_length'] <= max_text_length, num_proc=8)
     return dataset
-
-train_data = preprocess_and_tokenize_with_context(train_data, "train_data")
-val_data = preprocess_and_tokenize_with_context(val_data, "val_data")
-test_data = preprocess_and_tokenize_with_context(test_data, "test_data")
-
-print("[INFO] Data preprocessing and tokenization completed.")
-
-
-from datasets import concatenate_datasets, Dataset
-
-def move_random_samples(eval_dataset, train_dataset, num_samples=4500):
-    # 評価データセットのインデックスを取得
-    eval_indices = list(range(len(eval_dataset)))
-    # ランダムにインデックスをサンプリング
-    random.seed(42)
-    selected_indices = random.sample(eval_indices, num_samples)
-
-    # サブセットを作成
-    selected_subset = eval_dataset.select(selected_indices)
-    remaining_eval_subset = eval_dataset.select([i for i in eval_indices if i not in selected_indices])
-
-    # SubsetをDatasetオブジェクトに変換
-    selected_subset = Dataset.from_dict(selected_subset.to_dict())
-
-    # concatenate_datasetsでサブセットを結合
-    train_dataset = concatenate_datasets([train_dataset, selected_subset])
-
-    return train_dataset, remaining_eval_subset
-
-# 評価データセットから4000件をトレーニングデータセットに移す
-train_data, eval_data = move_random_samples(val_data, train_data, num_samples=4000)
-train_data = concatenate_datasets([train_data, test_data])
-
-num_train_samples = int(0.6 * len(train_data))
-train_data_used = train_data.select(range(num_train_samples))
-train_data_unused = train_data.select(range(num_train_samples, len(train_data)))
-
-num_eval_samples = int(0.6 * len(eval_data))
-eval_data_used = eval_data.select(range(num_eval_samples))
-eval_data_unused = eval_data.select(range(num_eval_samples, len(eval_data)))
-
-""
-print("[INFO] Data split successfully.")
-
-if phase == 2:
-    train_data_ja = train_data_ja.shuffle(seed=42)
-    val_data_ja = val_data_ja.shuffle(seed=42)
-    test_data_ja = test_data_ja.shuffle(seed=42)
-    train_data_ja = concatenate_datasets([train_data_ja, test_data_ja])
-
-    train_data_en = train_data_en.shuffle(seed=42)
-    val_data_en = val_data_en.shuffle(seed=42)
-    test_data_en = test_data_en.shuffle(seed=42)
-    train_data_en = concatenate_datasets([train_data_en, test_data_en])
 
 # 前処理とトークン化を新しいデータセットにも適用
 def preprocess_and_tokenize(dataset, desc_prefix):
@@ -291,216 +241,79 @@ def preprocess_and_tokenize(dataset, desc_prefix):
     dataset = dataset.filter(lambda x: x['text_length'] <= max_text_length, num_proc=8)
     return dataset
 
-if phase == 2:
+from datasets import concatenate_datasets
+
+if phase == 1:
+    max_text_length = 131072
+    # データのシャッフルとフィルタリング、バッチ処理対応
+    train_data = train_data.shuffle(seed=42)
+    val_data = val_data.shuffle(seed=42)
+
+    train_data_phase1 = preprocess_and_tokenize_with_context(train_data, "train_data")
+    val_data_phase1 = preprocess_and_tokenize_with_context(val_data, "val_data")
+
+    print("[INFO] Data preprocessing and tokenization completed.")
+
+    # データセットの件数をカウントして表示
+    print(f"Number of train samples (phase1): {len(train_data_phase1)}")
+    print(f"Number of validation samples (phase1): {len(val_data_phase1)}")
+elif phase == 2:
+    max_text_length = 1024
+    train_data_long = train_data_long.shuffle(seed=42)
+    val_data_long = val_data_long.shuffle(seed=42)
+
+    train_data_ja = train_data_ja.shuffle(seed=42)
+    val_data_ja = val_data_ja.shuffle(seed=42)
+
+    train_data_en = train_data_en.shuffle(seed=42)
+    val_data_en = val_data_en.shuffle(seed=42)
+
+    train_data_long = preprocess_and_tokenize(train_data_long, "train_data_long")
+    val_data_long = preprocess_and_tokenize(val_data_long, "val_data_long")
+
     train_data_ja = preprocess_and_tokenize(train_data_ja, "train_data_ja")
     val_data_ja = preprocess_and_tokenize(val_data_ja, "val_data_ja")
-    train_data_ja, val_data_ja = move_random_samples(val_data_ja, train_data_ja, num_samples=50)
 
     train_data_en = preprocess_and_tokenize(train_data_en, "train_data_en")
     val_data_en = preprocess_and_tokenize(val_data_en, "val_data_en")
-    train_data_en, val_data_en = move_random_samples(val_data_en, train_data_en, num_samples=510)
 
-    print("[INFO] Text-only data preprocessing and tokenization completed.")
+    print("[INFO] Phase2 data preprocessing and tokenization completed.")
 
-"""
-from datasets import Dataset
-import datasets
-
-def ensure_dataset_features(dataset):
-    # データセットが必要な特徴量を持っているか確認し、必要に応じて調整
-    required_columns = [
-        'context_input_ids', 
-        'context_attention_mask', 
-        'input_ids', 
-        'attention_mask', 
-        'length', 
-        'text_length'
-    ]
-    
-    # 不足している列があれば追加
-    for col in required_columns:
-        if col not in dataset.column_names:
-            if 'input_ids' in col:
-                # 空のリストを追加（整数型として）
-                dataset = dataset.add_column(col, [[0]] * len(dataset))
-            elif 'attention_mask' in col:
-                # 0のリストを追加（整数型として）
-                dataset = dataset.add_column(col, [[0]] * len(dataset))
-            elif col in ['length', 'text_length']:
-                # 長さ0を追加（整数型として）
-                dataset = dataset.add_column(col, [0] * len(dataset))
-    
-    # 型の強制変換（整数型を明示的に指定）
-    features = datasets.Features({
-        'context_input_ids': datasets.Sequence(datasets.Value('int64')),
-        'context_attention_mask': datasets.Sequence(datasets.Value('int64')),
-        'input_ids': datasets.Sequence(datasets.Value('int64')),
-        'attention_mask': datasets.Sequence(datasets.Value('int64')),
-        'length': datasets.Value('int64'),
-        'text_length': datasets.Value('int64')
-    })
-    
-    dataset = dataset.cast(features)
-    
-    return dataset
-"""
-
-if phase == 2:
     # データセットの前処理と結合
-    train_data_used = concatenate_datasets([
-        train_data_unused,
+    train_data_phase2 = concatenate_datasets([
+        train_data_long,
         train_data_ja,
         train_data_en
     ])
 
-    eval_data_used = concatenate_datasets([
-        eval_data_unused,
+    val_data_phase2 = concatenate_datasets([
+        val_data_long,
         val_data_ja, 
         val_data_en
     ])
 
-    train_data_used = train_data_used.shuffle(seed=42)
-    eval_data_used = eval_data_used.shuffle(seed=42)
+    train_data_phase2 = train_data_phase2.shuffle(seed=42)
+    val_data_phase2 = val_data_phase2.shuffle(seed=42)
 
-    print(f"Number of train samples(unused): {len(train_data_unused)}")
-    print(f"Number of validation samples(unused): {len(eval_data_unused)}")
+    print(f"Number of train samples(long): {len(train_data_long)}")
+    print(f"Number of validation samples(long): {len(val_data_long)}")
     print(f"Number of train samples(ja): {len(train_data_ja)}")
     print(f"Number of validation samples(ja): {len(val_data_ja)}")
     print(f"Number of train samples(en): {len(train_data_en)}")
     print(f"Number of validation samples(en): {len(val_data_en)}")
 
-# データセットの件数をカウントして表示
-print(f"Number of train samples: {len(train_data_used)}")
-print(f"Number of validation samples: {len(eval_data_used)}")
+    print(f"Number of train samples (phase2): {len(train_data_phase2)}")
+    print(f"Number of validation samples (phase2): {len(val_data_phase2)}")
+
 
 # train_data_sorted = train_data_used.sort('length')
 
-"""
-def data_collator(features):
-    # context部分のトークンをパディング
-    context_features = [{
-        'input_ids': f['context_input_ids'],
-        'attention_mask': f.get('context_attention_mask', [1] * len(f['context_input_ids']))
-    } for f in features]
-    
-    context_batch = tokenizer.context_tokenizer.pad(
-        context_features,
-        padding=True,
-        max_length=None,
-        return_tensors="pt"
-    )
-    
-    # padトークンのみで構成されているかチェック
-    pad_token_id = tokenizer.context_tokenizer.pad_token_id
-    is_all_padding = (context_batch['input_ids'] == pad_token_id).all(dim=1)
-    # all paddingの場合、attention_maskを0に設定
-    context_batch['attention_mask'][is_all_padding] = 0
-    
-    # text部分のトークンをパディング
-    text_features = [{
-        'input_ids': f['input_ids'],
-        'attention_mask': f['attention_mask']
-    } for f in features]
-    text_batch = tokenizer.text_tokenizer.pad(
-        text_features,
-        padding=True,
-        max_length=None,
-        return_tensors="pt"
-    )
-    
-    # ラベルのパディング（input_idsと同じ）
-    label_features = [{'input_ids': f['input_ids']} for f in features]
-    labels_batch = tokenizer.text_tokenizer.pad(
-        label_features,
-        padding=True,
-        max_length=None,
-        return_tensors="pt"
-    )
-    
-    # パディングされたバッチを統合
-    batch = {
-        'context_input_ids': context_batch['input_ids'],
-        'context_attention_mask': context_batch['attention_mask'],
-        'input_ids': text_batch['input_ids'],
-        'attention_mask': text_batch['attention_mask'],
-        'labels': labels_batch['input_ids']
-    }
-    return batch
-"""
-"""
-def data_collator(features):
-    # context部分のトークンをパディング
-    context_features = [{
-        'input_ids': f['context_input_ids'],
-        'attention_mask': f.get('context_attention_mask', [1] * len(f['context_input_ids']))
-    } for f in features]
-    
-    context_batch = tokenizer.context_tokenizer.pad(
-        context_features,
-        padding=True,
-        max_length=None,
-        return_tensors="pt"
-    )
-    
-    # padトークンID
-    pad_token_id = tokenizer.context_tokenizer.pad_token_id
-    
-    # バッチ内すべてが pad_token_id かどうかを判定
-    # (shape: [batch_size, seq_len]) -> 行方向にすべてが pad_token_id かを判定し、
-    # さらにその結果がバッチ全体で True (すべてが True) になっているかを判定します。
-    all_context_is_pad = (context_batch['input_ids'] == pad_token_id).all(dim=1).all()
-    
-    # text部分の処理
-    text_features = [{
-        'input_ids': f['input_ids'],
-        'attention_mask': f['attention_mask']
-    } for f in features]
-    text_batch = tokenizer.text_tokenizer.pad(
-        text_features,
-        padding=True,
-        max_length=None,
-        return_tensors="pt"
-    )
-
-    # ラベルのパディング（input_idsと同じ）
-    label_features = [{'input_ids': f['input_ids']} for f in features]
-    labels_batch = tokenizer.text_tokenizer.pad(
-        label_features,
-        padding=True,
-        max_length=None,
-        return_tensors="pt"
-    )
-
-    if all_context_is_pad:
-        # バッチ内のコンテキストがすべてpadトークンなら
-        # context_input_ids, context_attention_mask を消す
-        batch = {
-            'input_ids': text_batch['input_ids'],
-            'attention_mask': text_batch['attention_mask'],
-            'labels': labels_batch['input_ids']
-        }
-    else:
-        # バッチ内の一部だけ pad なら、該当サンプルだけ attention_mask=0 にするなどの対応を行う
-        # （すべては消さず、通常通り context を残す場合の例）
-        is_all_padding_sample = (context_batch['input_ids'] == pad_token_id).all(dim=1)
-        context_batch['attention_mask'][is_all_padding_sample] = 0
-        
-        batch = {
-            'context_input_ids': context_batch['input_ids'],
-            'context_attention_mask': context_batch['attention_mask'],
-            'input_ids': text_batch['input_ids'],
-            'attention_mask': text_batch['attention_mask'],
-            'labels': labels_batch['input_ids']
-        }
-
-    return batch
-"""
 class DataCollatorAssistantWithContext:
     """
     1) context_input_ids, context_attention_mask を含む入力をパディング・整形し、
        コンテキストがすべて pad のときはそれを削除、部分的に pad のときは attention_mask を 0 に。
     2) メインテキスト (input_ids, attention_mask) もパディングし、labels もパディング。
-    3) 「<|assistant|> ～ </s>」以外のトークンを -100 に置き換え、アシスタント部分のみ学習対象にする。
+    3) 「<|im_start|>assistant ~ <|im_end|>」以外のトークンを labels = -100 に置き換える。
     """
 
     def __init__(self, tokenizer):
@@ -508,17 +321,22 @@ class DataCollatorAssistantWithContext:
         tokenizer には以下のような想定:
             tokenizer.context_tokenizer
             tokenizer.text_tokenizer
-            （context / text を分けている場合）
-        もし単一の tokenizer のみ使用なら適宜書き換えてください。
-        """
+            または context / text 共通で tokenizer を流用するなら
+            tokenizer.pad(...) で分けて使ってもOK。
 
+        ここでは例として tokenizer.context_tokenizer, tokenizer.text_tokenizer を使う想定。
+        """
         self.tokenizer = tokenizer
 
-        # 新しいチャットテンプレートに合わせた特殊トークンID
-        #   <|assistant|> => 51201
-        #   </s>          => 2
-        self.assistant_start_id = 51201  # <|assistant|>
-        self.assistant_end_id   = 2      # </s>
+        # 以下は「アシスタント部分のみを学習対象とする」ための特殊トークン設定
+        self.start_token_id = tokenizer.convert_tokens_to_ids("<|im_start|>")
+        self.end_token_id   = tokenizer.convert_tokens_to_ids("<|im_end|>")
+
+        # "assistant" のトークン ID (必要に応じて変更)
+        self.assistant_token_id = 77091
+
+        # 改行のトークンID (必要に応じて変更)
+        self.newline_token_id = 198
 
     def __call__(self, features):
         """
@@ -526,7 +344,7 @@ class DataCollatorAssistantWithContext:
         [
             {
                 "context_input_ids": [...],
-                "context_attention_mask": [...],  # 無い場合もある
+                "context_attention_mask": [...],  # 無い場合もあるので .get() などで扱う
                 "input_ids": [...],
                 "attention_mask": [...],
             },
@@ -534,9 +352,10 @@ class DataCollatorAssistantWithContext:
         ]
         """
 
-        # ---------------------------------------------------
-        # 1) コンテキスト部分のパディング & 全padチェック
-        # ---------------------------------------------------
+        # --------
+        # 1) コンテキスト部分のパディングと削除判定
+        # --------
+        # context_input_ids, attention_mask が与えられていない場合も考慮
         context_features = []
         for f in features:
             if "context_input_ids" in f:
@@ -545,34 +364,40 @@ class DataCollatorAssistantWithContext:
                     'attention_mask': f.get("context_attention_mask", [1]*len(f["context_input_ids"]))
                 })
             else:
-                # コンテキストが無い場合は空
+                # コンテキストが無い場合は空配列（または適当に処理）を入れておく
                 context_features.append({
                     'input_ids': [],
                     'attention_mask': []
                 })
 
+        # パディング (context用)
         context_batch = self.tokenizer.context_tokenizer.pad(
             context_features,
             padding=True,
             return_tensors="pt"
         )
+
         pad_token_id = self.tokenizer.context_tokenizer.pad_token_id
 
-        # [batch_size, seq_len] => 行方向にpad判定 => 全サンプルがTrueなら True
+        # バッチ全体が pad かの判定
+        # [batch_size, seq_len] => 行方向に all pad => さらに全サンプル True => batch 全体 True
         all_context_is_pad = (context_batch["input_ids"] == pad_token_id).all(dim=1).all()
 
-        # ---------------------------------------------------
-        # 2) テキスト部分のパディングと labels (初期値は同じ)
-        # ---------------------------------------------------
+        # --------
+        # 2) テキスト部分のパディングと labels 作成 (まだ -100 処理はしない)
+        # --------
         text_features = [{
             'input_ids': f['input_ids'],
             'attention_mask': f['attention_mask']
         } for f in features]
+
         text_batch = self.tokenizer.text_tokenizer.pad(
             text_features,
             padding=True,
             return_tensors="pt"
         )
+
+        # ラベルも同様にパディング (初期値は input_ids と同じ)
         label_features = [{'input_ids': f['input_ids']} for f in features]
         labels_batch = self.tokenizer.text_tokenizer.pad(
             label_features,
@@ -580,101 +405,84 @@ class DataCollatorAssistantWithContext:
             return_tensors="pt"
         )
 
-        # ---------------------------------------------------
-        # 3) コンテキスト削除 or 部分的 pad の場合の attention_mask 調整
-        # ---------------------------------------------------
+        # --------
+        # 3) コンテキスト削除 or attention_mask 調整
+        # --------
         if all_context_is_pad:
-            # バッチ内すべてが pad の場合は context を無視
+            # バッチ内のコンテキストがすべて pad トークンなら context を取り除く
             batch = {
-                "input_ids": text_batch["input_ids"],
-                "attention_mask": text_batch["attention_mask"],
-                "labels": labels_batch["input_ids"]
+                'input_ids': text_batch['input_ids'],
+                'attention_mask': text_batch['attention_mask'],
+                'labels': labels_batch['input_ids'],
             }
         else:
-            # 一部だけ pad のサンプル => そのサンプルの context の attention_mask=0
-            is_all_padding_sample = (context_batch["input_ids"] == pad_token_id).all(dim=1)
-            context_batch["attention_mask"][is_all_padding_sample] = 0
+            # バッチ内の一部が pad のサンプルだけ attention_mask = 0 に
+            is_all_padding_sample = (context_batch['input_ids'] == pad_token_id).all(dim=1)
+            context_batch['attention_mask'][is_all_padding_sample] = 0
 
             batch = {
-                "context_input_ids": context_batch["input_ids"],
-                "context_attention_mask": context_batch["attention_mask"],
-                "input_ids": text_batch["input_ids"],
-                "attention_mask": text_batch["attention_mask"],
-                "labels": labels_batch["input_ids"]
+                'context_input_ids': context_batch['input_ids'],
+                'context_attention_mask': context_batch['attention_mask'],
+                'input_ids': text_batch['input_ids'],
+                'attention_mask': text_batch['attention_mask'],
+                'labels': labels_batch['input_ids'],
             }
 
-        # ---------------------------------------------------
-        # 4) アシスタント部分 (<|assistant|> ~ </s>) 以外を -100 に
-        # ---------------------------------------------------
+        # --------
+        # 4) 「<|im_start|>assistant ~ <|im_end|>」以外を -100 に置き換える
+        #    （メインテキスト側: batch["labels"] に対して実行）
+        # --------
+        # labels は [batch_size, seq_len] でパディング後のトークン ID が入っている
+        # 上で作った labels_batch['input_ids'] を batch["labels"] として登録済み
         labels = batch["labels"]
-        input_ids = batch["input_ids"]
+        input_ids = batch["input_ids"]  # テキスト用 input_ids
 
         batch_size = labels.size(0)
         seq_len = labels.size(1)
 
-        for b_idx in range(batch_size):
-            token_ids = input_ids[b_idx]
+        for idx in range(batch_size):
+            token_ids = input_ids[idx]
             in_assistant = False
 
             i = 0
             while i < seq_len:
                 tid = token_ids[i]
 
-                # <|assistant|> に遭遇したら、アシスタント区間開始
-                if tid == self.assistant_start_id:
-                    in_assistant = True
-                    # 開始トークン自体は学習させない
-                    labels[b_idx, i] = -100
+                # <|im_start|> に遭遇し、その次が assistant トークンなら開始
+                if tid == self.start_token_id:
+                    if (i + 1 < seq_len) and (token_ids[i+1] == self.assistant_token_id):
+                        in_assistant = True
+                        # <|im_start|>, assistant は学習対象外
+                        labels[idx, i]   = -100
+                        labels[idx, i+1] = -100
 
-                # </s> に遭遇したら、アシスタント区間終了
-                elif tid == self.assistant_end_id:
+                        # もし直後の改行も無視するなら
+                        if (i + 2 < seq_len) and (token_ids[i+2] == self.newline_token_id):
+                            labels[idx, i+2] = -100
+                        i += 2  # 2トークン分飛ばす
+                        continue
+                    else:
+                        # assistant トークンでなければ学習対象外
+                        labels[idx, i] = -100
+                        in_assistant = False
+
+                elif tid == self.end_token_id:
+                    # アシスタント区間終了
                     in_assistant = False
-                    # 終了トークン </s> も学習させない
-                    labels[b_idx, i] = -100
+                    # 終了トークン自体も学習対象外
+                    # labels[idx, i] = -100
+                    # 終了トークンは学習対象に
 
                 else:
-                    # アシスタント区間外はすべて -100
+                    # アシスタント区間外は学習対象外に
                     if not in_assistant:
-                        labels[b_idx, i] = -100
+                        labels[idx, i] = -100
 
                 i += 1
 
         batch["labels"] = labels
+
         return batch
-
-
-# サンプルの長さに基づいてデータをソートし、バッチを形成するためのカスタムサンプラー
-from torch.utils.data import Sampler
-import numpy as np
-
-class GroupedLengthSampler(Sampler):
-    def __init__(self, lengths, batch_size, shuffle=True):
-        self.lengths = lengths
-        self.batch_size = batch_size
-        self.shuffle = shuffle
-
-        # インデックスと長さを取得
-        self.indices_lengths = list(enumerate(self.lengths))
-
-        # 長さに基づいてソート
-        self.indices_lengths.sort(key=lambda x: x[1], reverse=True)
-
-        # バッチを形成
-        self.batches = [self.indices_lengths[i:i + self.batch_size] for i in range(0, len(self.indices_lengths), self.batch_size)]
-
-        if self.shuffle:
-            random.seed(42)
-            random.shuffle(self.batches)
-
-        # フラットなインデックスリストを作成
-        self.indices = [idx for batch in self.batches for idx, _ in batch]
-
-    def __iter__(self):
-        return iter(self.indices)
-
-    def __len__(self):
-        return len(self.indices)
-
 
 
 """
@@ -687,148 +495,6 @@ for i in range(len(first_batch)):
     print(f"Text tokens count: {text_tokens_count}")
 """
 
-from torch.utils.data import DataLoader
-from queue import Queue
-
-class NetworkMonitor:
-    def __init__(self, rank, world_size):
-        self.rank = rank
-        self.world_size = world_size
-        self.running = True
-        self.previous_bytes = self._get_network_stats()
-        self.metrics_queue = Queue()
-        
-    def _get_network_stats(self):
-        net_io = psutil.net_io_counters()
-        return {
-            'bytes_sent': net_io.bytes_sent,
-            'bytes_recv': net_io.bytes_recv,
-            'timestamp': time.time()
-        }
-
-    def calculate_bandwidth(self, current_bytes, previous_bytes):
-        time_diff = current_bytes['timestamp'] - previous_bytes['timestamp']
-        if time_diff == 0:
-            return 0, 0
-            
-        sent_bandwidth = (current_bytes['bytes_sent'] - previous_bytes['bytes_sent']) / time_diff
-        recv_bandwidth = (current_bytes['bytes_recv'] - previous_bytes['bytes_recv']) / time_diff
-        return sent_bandwidth, recv_bandwidth
-
-    def monitor(self):
-        while self.running:
-            current_bytes = self._get_network_stats()
-            sent_bandwidth, recv_bandwidth = self.calculate_bandwidth(
-                current_bytes, self.previous_bytes
-            )
-            
-            metrics = {
-                'rank': self.rank,
-                'send_bandwidth_mbps': sent_bandwidth / (1024 * 1024),
-                'recv_bandwidth_mbps': recv_bandwidth / (1024 * 1024),
-                'total_sent_gb': current_bytes['bytes_sent'] / (1024 * 1024 * 1024),
-                'total_recv_gb': current_bytes['bytes_recv'] / (1024 * 1024 * 1024),
-                'timestamp': current_bytes['timestamp']
-            }
-            
-            self.metrics_queue.put(metrics)
-            self.previous_bytes = current_bytes
-            time.sleep(1.0)  # 1秒間隔での測定
-
-    def stop(self):
-        self.running = False
-
-class CustomTrainer(Trainer):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.network_monitor = NetworkMonitor(dist.get_rank(), dist.get_world_size())
-        self.monitor_thread = None
-        self.last_log_time = time.time()
-
-    def log_network_metrics(self):
-        if dist.get_rank() == 0:
-            current_time = time.time()
-            if current_time - self.last_log_time >= 1.0:  # 1秒ごとにログ
-                try:
-                    metrics = self.network_monitor.metrics_queue.get_nowait()
-                    wandb.log({
-                        f'network/node_{metrics["rank"]}/send_bandwidth_mbps': metrics['send_bandwidth_mbps'],
-                        f'network/node_{metrics["rank"]}/recv_bandwidth_mbps': metrics['recv_bandwidth_mbps'],
-                        f'network/node_{metrics["rank"]}/total_sent_gb': metrics['total_sent_gb'],
-                        f'network/node_{metrics["rank"]}/total_recv_gb': metrics['total_recv_gb']
-                    })
-                    self.last_log_time = current_time
-                except Queue.Empty:
-                    pass
-
-    def training_step(self, model, inputs, optimizer=None):
-        try:
-            # 通常のトレーニングステップを実行
-            loss = super().training_step(model, inputs, optimizer)
-            # メトリクスのログ記録
-            self.log_network_metrics()
-            return loss
-        except Exception as e:
-            # エラーが発生した場合、データの長さを出力
-            input_ids = inputs.get('input_ids', None)
-            context_input_ids = inputs.get('context_input_ids', None)
-            if input_ids is not None:
-                if isinstance(input_ids, torch.Tensor):
-                    text_lengths = [input_ids.size(1)]
-                else:
-                    text_lengths = [len(ids) for ids in input_ids]
-                print(f"Error occurred during training on batch with text lengths: {text_lengths}")
-            if context_input_ids is not None:
-                if isinstance(context_input_ids, torch.Tensor):
-                    context_lengths = [context_input_ids.size(1)]
-                else:
-                    context_lengths = [len(ids) for ids in context_input_ids]
-                print(f"Error occurred during training on batch with context lengths: {context_lengths}")
-            else:
-                print("Error occurred during training but could not retrieve input_ids or context_input_ids")
-            # 例外を再度発生させる
-            raise e
-
-    def train(self, *args, **kwargs):
-        # モニタリングスレッドの開始
-        self.monitor_thread = threading.Thread(target=self.network_monitor.monitor)
-        self.monitor_thread.daemon = True
-        self.monitor_thread.start()
-        
-        try:
-            result = super().train(*args, **kwargs)
-        finally:
-            # モニタリングの停止
-            self.network_monitor.stop()
-            if self.monitor_thread:
-                self.monitor_thread.join(timeout=5)
-        
-        return result
-    """
-    def get_train_dataloader(self):
-        if self.train_dataset is None:
-            raise ValueError("Trainer: training requires a train_dataset.")
-
-        # サンプルの長さを取得
-        lengths = self.train_dataset["length"]
-
-        # カスタムサンプラーを作成
-        sampler = GroupedLengthSampler(
-            lengths=lengths,
-            batch_size=self.args.per_device_train_batch_size,
-            shuffle=False
-        )
-
-        # データローダーを作成
-        return DataLoader(
-            self.train_dataset,
-            batch_size=self.args.per_device_train_batch_size,
-            sampler=sampler,
-            collate_fn=self.data_collator,
-            num_workers=self.args.dataloader_num_workers,
-            pin_memory=self.args.dataloader_pin_memory,
-        )
-    """
 
 # Hugging Faceの進捗バーを強制的に有効化
 logging.set_verbosity_info()
@@ -843,7 +509,7 @@ args = TrainingArguments(
     learning_rate=2e-5 if phase==2 else 1e-3, # Phase1: 1e-3, Phase2: 2e-5
     # label_smoothing_factor=0.1 if phase==2 else 0.0,
     adam_beta2=0.95,
-    weight_decay=0.0,
+    weight_decay=0.1,
     lr_scheduler_type="cosine",
     warmup_ratio=0.03,
     disable_tqdm=False,  # tqdmの進捗バーを有効化
@@ -852,8 +518,8 @@ args = TrainingArguments(
     logging_strategy="steps",
     eval_strategy="steps",
     save_strategy="steps",
-    eval_steps=73, # Phase1: 73, Phase2: 73
-    save_steps=2506 if phase==2 else 949, # Phase1: 949, Phase2: 2506
+    eval_steps=50, # Phase1: 73, Phase2: 73
+    save_steps=2000, # Phase1: 949, Phase2: 2506
     output_dir="output",
     report_to="wandb",
     save_total_limit=3,
@@ -875,8 +541,8 @@ args = TrainingArguments(
 trainer = Trainer(
     model=model,
     args=args,
-    train_dataset=train_data_used,
-    eval_dataset=eval_data_used,
+    train_dataset=train_data_phase2 if phase == 2 else train_data_phase1,
+    eval_dataset=val_data_phase2 if phase == 2 else val_data_phase1,
     data_collator=DataCollatorAssistantWithContext(tokenizer), # data_collator,
 )
 
@@ -889,4 +555,4 @@ for name, param in model.connector.named_parameters():
         print(f"trained param - {name}: {param.shape}")
 
 # 学習済みモデルの保存
-model.save_pretrained("co_output_model", safe_serialization=True)
+model.save_pretrained("c3_output_model", safe_serialization=True)
