@@ -133,18 +133,18 @@ class CcubedModelBuilder:
         )
 
         # Initialize Ccubed model
-        co_encoder_model = CcubedForConditionalGeneration(config)
+        c_cubed_model = CcubedForConditionalGeneration(config)
 
         # Load state dict for context tower
-        co_encoder_model.context_tower.tower.load_state_dict(context_model.state_dict())
+        c_cubed_model.context_tower.tower.load_state_dict(context_model.state_dict())
 
         # Load state dict for language model
-        co_encoder_model.language_model.load_state_dict(text_model.state_dict())
+        c_cubed_model.language_model.load_state_dict(text_model.state_dict())
 
         # The connector is already initialized in the CcubedForConditionalGeneration constructor
 
         # Save the combined model
-        co_encoder_model.save_pretrained(self.output_path, max_shard_size="10GB")
+        c_cubed_model.save_pretrained(self.output_path, max_shard_size="10GB")
         # config.save_pretrained(self.output_path)
 
         print(f"Ccubed model saved to {self.output_path}")
@@ -163,13 +163,3 @@ class CcubedModelBuilder:
         config = CcubedConfig.from_pretrained(model_path)
         model = CcubedForConditionalGeneration.from_pretrained(model_path, config=config)
         return model
-
-# Usage example:
-# builder = CcubedModelBuilder("bert-base-uncased", "gpt2", "./co_encoder_model")
-# builder.build_and_save_model()
-
-# To load the saved model:
-# loaded_model = CcubedModelBuilder.from_pretrained("./co_encoder_model")
-
-# tokenizer_builder = CcubedTokenizerBuilder("bert-base-uncased", "gpt2", "./co_encoder_model")
-# tokenizer_builder.build_and_save_tokenizer()

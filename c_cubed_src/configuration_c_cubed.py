@@ -1,5 +1,5 @@
 # coding=utf-8
-"""CoEncoder model configuration"""
+"""Ccubed model configuration"""
 
 from transformers.configuration_utils import PretrainedConfig
 from transformers.utils import logging
@@ -8,11 +8,11 @@ from transformers import CONFIG_MAPPING
 logger = logging.get_logger(__name__)
 
 
-class CoEncoderConfig(PretrainedConfig):
+class CcubedConfig(PretrainedConfig):
     r"""
     """
 
-    model_type = "co_encoder"
+    model_type = "c_cubed"
 
     def __init__(
         self,
@@ -22,7 +22,7 @@ class CoEncoderConfig(PretrainedConfig):
         connector_hidden_act="gelu",
         context_feature_layer=-2,
         context_feature_select_strategy="default",
-        begin_of_context_token_id=None,
+        start_of_context_token_id=None,
         end_of_context_token_id=None,
         tie_word_embeddings=False,
         **kwargs,
@@ -31,7 +31,7 @@ class CoEncoderConfig(PretrainedConfig):
         self.connector_hidden_act = connector_hidden_act
         self.context_feature_layer = context_feature_layer
         self.context_feature_select_strategy = context_feature_select_strategy
-        self.begin_of_context_token_id = begin_of_context_token_id
+        self.start_of_context_token_id = start_of_context_token_id
         self.end_of_context_token_id = end_of_context_token_id
 
         if context_feature_select_strategy not in ["default"]:
@@ -49,10 +49,10 @@ class CoEncoderConfig(PretrainedConfig):
         self.context_config = context_config
 
         if isinstance(text_config, dict):
-            text_config["model_type"] = text_config["model_type"] if "model_type" in text_config else "llama"
+            text_config["model_type"] = text_config["model_type"] if "model_type" in text_config else "qwen2"
             text_config = CONFIG_MAPPING[text_config["model_type"]](**text_config)
         elif text_config is None:
-            text_config = CONFIG_MAPPING["llama"]()
+            text_config = CONFIG_MAPPING["qwen2"]()
 
         self.text_config = text_config
 
@@ -62,7 +62,7 @@ class CoEncoderConfig(PretrainedConfig):
             connector_hidden_act=connector_hidden_act,
             context_feature_layer=context_feature_layer, 
             context_feature_select_strategy=context_feature_select_strategy,
-            begin_of_context_token_id=begin_of_context_token_id,
+            start_of_context_token_id=start_of_context_token_id,
             end_of_context_token_id=end_of_context_token_id,
             **kwargs
         )
