@@ -239,9 +239,9 @@ class CcubedDynamicWeightedAvgPool1d(nn.Module):
     def __init__(self, config, output_size_min=32, output_size_max=131072):
         super().__init__()
         # Attention mechanism for estimating output size
-        self.size_estimation_attention = CcubedDynamicFlashAttention2(config)
+        self.size_estim_attn = CcubedDynamicFlashAttention2(config)
         # Attention mechanism for weighted pooling
-        self.weighted_pooling_attention = CcubedDynamicFlashAttention2(config)
+        self.imp_estim_attn = CcubedDynamicFlashAttention2(config)
         self.output_size_min = output_size_min
         self.output_size_max = (
             config.context_config.max_position_embeddings if config.context_config.max_position_embeddings is not None else output_size_max
@@ -264,7 +264,7 @@ class CcubedDynamicWeightedAvgPool1d(nn.Module):
 
         # Estimate output size using attention mechanism
         # attn_output_size: (batch_size, seq_len, 1)
-        attn_output_size, _ = self.size_estimation_attention(hidden_states)
+        attn_output_size, _ = self.size_estim_attn(hidden_states)
 
         # Calculate dynamic output sizes for each batch item
         # (batch_size, seq_len, 1) -> (batch_size, 1)
@@ -280,7 +280,7 @@ class CcubedDynamicWeightedAvgPool1d(nn.Module):
 
         # Compute attention weights for weighted pooling
         # attn_output_weights: (batch_size, seq_len, 1)
-        attn_output_weights, _ = self.weighted_pooling_attention(hidden_states)
+        attn_output_weights, _ = self.imp_estim_attn(hidden_states)
         # Normalize with sigmoid function for use as weights
         # attention_weights: (batch_size, seq_len)
         attention_weights = torch.sigmoid(attn_output_weights).squeeze(-1)
@@ -439,7 +439,7 @@ class CcubedForConditionalGeneration(CcubedPreTrainedModel):
 
         self.vocab_size = config.text_config.vocab_size
         self.ignore_index = config.ignore_index if hasattr(config, 'ignore_index') else -100
-        self.begin_of_context_token_id = config.begin_of_context_token_id
+        self.start_of_context_token_id = config.start_of_context_token_id
         self.end_of_context_token_id = config.end_of_context_token_id
         
         self.post_init()
@@ -509,7 +509,7 @@ class CcubedForConditionalGeneration(CcubedPreTrainedModel):
         context_seq_len = context_features.size(1)
         
         # Create embeddings for begin and end of context tokens
-        begin_context_embed = self.get_input_embeddings()(torch.tensor(self.begin_of_context_token_id, device=context_features.device))
+        begin_context_embed = self.get_input_embeddings()(torch.tensor(self.start_of_context_token_id, device=context_features.device))
         end_context_embed = self.get_input_embeddings()(torch.tensor(self.end_of_context_token_id, device=context_features.device))
         
         # Determine the actual lengths of context sequences (excluding padding)

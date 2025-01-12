@@ -19,7 +19,7 @@ tokenizer_builder = CcubedTokenizerBuilder(
 """
 
 builder.build_and_save_model(
-    begin_of_context_token_id=128002,
+    start_of_context_token_id=128002,
     end_of_context_token_id=128003
 )
 """

@@ -424,7 +424,7 @@ class CcubedForConditionalGeneration(CcubedPreTrainedModel):
 
         self.vocab_size = config.text_config.vocab_size
         self.ignore_index = config.ignore_index if hasattr(config, 'ignore_index') else -100
-        self.begin_of_context_token_id = config.begin_of_context_token_id
+        self.start_of_context_token_id = config.start_of_context_token_id
         self.end_of_context_token_id = config.end_of_context_token_id
         
         self.post_init()
@@ -471,7 +471,7 @@ class CcubedForConditionalGeneration(CcubedPreTrainedModel):
         context_seq_len = context_features.size(1)
         
         # Create embeddings for begin and end of context tokens
-        begin_context_embed = self.get_input_embeddings()(torch.tensor(self.begin_of_context_token_id, device=context_features.device))
+        begin_context_embed = self.get_input_embeddings()(torch.tensor(self.start_of_context_token_id, device=context_features.device))
         end_context_embed = self.get_input_embeddings()(torch.tensor(self.end_of_context_token_id, device=context_features.device))
         
         # Determine the actual lengths of context sequences (excluding padding)
