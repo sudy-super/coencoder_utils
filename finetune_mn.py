@@ -26,7 +26,7 @@ import torch.distributed as dist
 phase = 1
 
 # DeepSpeedがtorch.distributedの初期化を行うため、その後でランクを取得します
-#dist.init_process_group(backend='nccl')  # 必要に応じてバックエンドを指定
+dist.init_process_group(backend='nccl')  # 必要に応じてバックエンドを指定
 
 # グローバルランク0のプロセスのみでWandBを初期化
 
