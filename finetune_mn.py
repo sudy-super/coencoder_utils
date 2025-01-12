@@ -43,18 +43,18 @@ torch.manual_seed(42)
 torch.cuda.manual_seed(42)
 
 if phase == 1:
-    model_name = "sudy-super/coencoder_test2"
+    model_name = "sudy-super/c_cubed"
 elif phase == 2:
-    model_name = "sudy-super/coencoder_test2_phase1_2"
+    model_name = "sudy-super/c_cubed_phase1"
 else:
     raise ValueError("Invalid phase value. Must be 1 or 2.")
 
 # CoEncoderトークナイザーとモデルの読み込み
 try:
-    tokenizer = CcubedDualTokenizer.from_pretrained("./co_model_production", trust_remote_code=True, use_fast=False)
+    tokenizer = CcubedDualTokenizer.from_pretrained("./tokenizer_production", trust_remote_code=True, use_fast=False)
 except:
     print("[INFO] Failed to load tokenizer with use_fast=False. Retrying with use_fast=True.")
-    tokenizer = CcubedDualTokenizer.from_pretrained("./co_model_production", trust_remote_code=True)
+    tokenizer = CcubedDualTokenizer.from_pretrained("./tokenizer_production", trust_remote_code=True)
 
 model = CcubedForConditionalGeneration.from_pretrained(
     model_name,
