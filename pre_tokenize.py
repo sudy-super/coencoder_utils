@@ -3,6 +3,7 @@ from torch.utils.data import Dataset, Subset
 from transformers import Trainer, TrainingArguments, logging
 import torch
 from datasets import load_dataset, DatasetDict
+import pandas as pd
 import wandb
 from safetensors.torch import load_file
 
@@ -20,8 +21,9 @@ import threading
 import time
 import psutil
 from datetime import datetime
+import gc
 
-phase = 1
+phase = 2
 
 try:
     tokenizer = CcubedDualTokenizer.from_pretrained("./tokenizer_production", trust_remote_code=True, use_fast=False)
@@ -128,8 +130,8 @@ def tokenize(batch):
     tokenized_outputs = tokenizer(
         context=truncated_contexts,
         text=batch['text'],
-        truncation=True,
-        max_length=max_context_tokens,
+        truncation=False,
+        max_length=None,
         padding=False,
         add_special_tokens=False,
     )
@@ -247,21 +249,29 @@ elif phase == 2:
     print(f"Number of train samples (phase2): {len(train_data_phase2)}")
     print(f"Number of validation samples (phase2): {len(val_data_phase2)}")
 
+
 if phase == 1:
-    # データセットを作成
-    dataset_dict = DatasetDict({
-        "train": Dataset.from_list(train_data_phase1),
-        "validation": Dataset.from_list(val_data_phase1)
-    })
-
-    # データセットをHugging Face Hubにアップロード
+    processed_train = train_data_phase1
+    processed_val = val_data_phase1
     dataset_name = "sudy-super/c_cubed_restoration_tokenized"
-    dataset_dict.push_to_hub(dataset_name)
-elif phase == 2:
-    dataset_dict = DatasetDict({
-        "train": Dataset.from_list(train_data_phase2),
-        "validation": Dataset.from_list(val_data_phase2)
-    })
-
+else:
+    processed_train = train_data_phase2
+    processed_val = val_data_phase2
     dataset_name = "sudy-super/c_cubed_finetune_tokenized"
-    dataset_dict.push_to_hub(dataset_name)
+
+# 必要な列のみ保持
+columns_to_keep = ['context_input_ids', 'input_ids', 'attention_mask', 'length', 'text_length']
+processed_train = processed_train.remove_columns([col for col in processed_train.column_names if col not in columns_to_keep])
+processed_val = processed_val.remove_columns([col for col in processed_val.column_names if col not in columns_to_keep])
+
+# メモリ解放
+# del train_data_phase1, val_data_phase1, train_data_phase2, val_data_phase2
+gc.collect()
+
+# データセットをHugging Face Hubにアップロード
+dataset_dict = DatasetDict({
+    "train": processed_train,
+    "validation": processed_val
+})
+
+dataset_dict.push_to_hub(dataset_name)
