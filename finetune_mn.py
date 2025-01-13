@@ -143,8 +143,8 @@ class DataCollatorAssistantWithContext:
         self.tokenizer = tokenizer
 
         # 以下は「アシスタント部分のみを学習対象とする」ための特殊トークン設定
-        self.start_token_id = tokenizer.convert_tokens_to_ids("<|im_start|>")
-        self.end_token_id   = tokenizer.convert_tokens_to_ids("<|im_end|>")
+        self.start_token_id = tokenizer.text_tokenizer.convert_tokens_to_ids("<|im_start|>")
+        self.end_token_id   = tokenizer.text_tokenizer.convert_tokens_to_ids("<|im_end|>")
 
         # "assistant" のトークン ID (必要に応じて変更)
         self.assistant_token_id = 77091
