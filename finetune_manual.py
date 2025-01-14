@@ -106,6 +106,7 @@ device_map = {
     'language_model.model.layers.31': 'cuda:3',
     'language_model.model.norm': 'cuda:3',
     'language_model.lm_head': 'cuda:3',
+    'context_tower.tower.lm_head.weight': 'cuda:1',
 }
 
 torch.manual_seed(42)
