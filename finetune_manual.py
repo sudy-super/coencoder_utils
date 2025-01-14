@@ -392,6 +392,34 @@ for i in range(len(first_batch)):
     print(f"Text tokens count: {text_tokens_count}")
 """
 
+class CustomTrainer(Trainer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+    def training_step(self, model, inputs, optimizer=None):
+        try:
+            # 通常のトレーニングステップを実行
+            loss = super().training_step(model, inputs, optimizer)
+            return loss
+        except Exception as e:
+            # エラーが発生した場合、データの長さを出力
+            input_ids = inputs.get('input_ids', None)
+            context_input_ids = inputs.get('context_input_ids', None)
+            if input_ids is not None:
+                if isinstance(input_ids, torch.Tensor):
+                    text_lengths = [input_ids.size(1)]
+                else:
+                    text_lengths = [len(ids) for ids in input_ids]
+                print(f"Error occurred during training on batch with text lengths: {text_lengths}")
+            if context_input_ids is not None:
+                if isinstance(context_input_ids, torch.Tensor):
+                    context_lengths = [context_input_ids.size(1)]
+                else:
+                    context_lengths = [len(ids) for ids in context_input_ids]
+                print(f"Error occurred during training on batch with context lengths: {context_lengths}")
+            else:
+                print("Error occurred during training but could not retrieve input_ids or context_input_ids")
+            # 例外を再度発生させる
+            raise e
 
 # Hugging Faceの進捗バーを強制的に有効化
 logging.set_verbosity_info()
@@ -435,7 +463,7 @@ args = TrainingArguments(
 )
 
 # Trainerの設定
-trainer = Trainer(
+trainer = CustomTrainer(
     model=model,
     args=args,
     train_dataset=train_data_phase2 if phase == 2 else train_data_phase1,
