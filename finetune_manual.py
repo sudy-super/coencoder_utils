@@ -21,7 +21,7 @@ import time
 import psutil
 from datetime import datetime
 
-import torch.distributed as dist
+# import torch.distributed as dist
 
 phase = 1
 """
