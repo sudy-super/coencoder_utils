@@ -196,8 +196,8 @@ elif phase == 2:
     train_data_phase2 = dataset["train"]
     val_data_phase2 = dataset["validation"]
 
-    train_data_phase2 = train_data_phase2.shuffle(seed=42)
-    val_data_phase2 = val_data_phase2.shuffle(seed=42)
+    train_data_phase2 = train_data_phase2.shuffle(seed=63)
+    val_data_phase2 = val_data_phase2.shuffle(seed=63)
 
     print(f"Number of train samples (phase2): {len(train_data_phase2)}")
     print(f"Number of validation samples (phase2): {len(val_data_phase2)}")
