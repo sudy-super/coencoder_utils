@@ -239,9 +239,9 @@ class CcubedDynamicWeightedAvgPool1d(nn.Module):
     def __init__(self, config, output_size_min=32, output_size_max=131072):
         super().__init__()
         # Attention mechanism for estimating output size
-        self.size_estim_attn = CcubedDynamicFlashAttention2(config)
+        self.size_estim_attn = CcubedDynamicAttention(config) # CcubedDynamicFlashAttention2(config)
         # Attention mechanism for weighted pooling
-        self.imp_estim_attn = CcubedDynamicFlashAttention2(config)
+        self.imp_estim_attn = CcubedDynamicAttention(config) # CcubedDynamicFlashAttention2(config)
         self.output_size_min = output_size_min
         self.output_size_max = (
             config.context_config.max_position_embeddings if config.context_config.max_position_embeddings is not None else output_size_max
