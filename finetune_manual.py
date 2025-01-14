@@ -40,6 +40,7 @@ if dist.get_rank() == 0:
 """
 
 device_map = {
+    # === context tower (ほぼ GPU:1 に集約) ===
     'context_tower.tower.model.embed_tokens': 'cuda:1',
     'context_tower.tower.model.rotary_emb': 'cuda:1',
     'context_tower.tower.model.layers.0': 'cuda:1',
@@ -65,16 +66,30 @@ device_map = {
     'context_tower.tower.model.layers.20': 'cuda:1',
     'context_tower.tower.model.layers.21': 'cuda:1',
     'context_tower.tower.model.layers.22': 'cuda:1',
+    # 最終レイヤーのみ GPU:0 に置く例（必要に応じてここも GPU:1 に揃える等、調整してください）
     'context_tower.tower.model.layers.23': 'cuda:0',
 
-    'connector.dynamic_pooling': 'cuda:1',
-    'connector.linear_1': 'cuda:0',
-    'connector.act': 'cuda:0',
-    'connector.linear_2': 'cuda:0',
-    
+    # Context Tower の最終処理(norm, lm_head) は GPU:0 に
+    'context_tower.tower.model.norm': 'cuda:0',
+    'context_tower.tower.lm_head': 'cuda:0',
+
+    # === connector部分 ===
+    # dynamic_pooling を隔離したいので GPU:2 に
+    'connector.dynamic_pooling': 'cuda:2',
+    # dynamic_pooling の計算結果を線形変換するモジュールたち
+    # こちらを同じ GPU:2 にまとめれば転送を1回にできますが、
+    # もしメモリ都合等で GPU:0 に残したい場合は下記を 'cuda:0' とし、転送が2回発生してもよい構成にします。
+    'connector.linear_1': 'cuda:2',
+    'connector.act': 'cuda:2',
+    'connector.linear_2': 'cuda:2',
+
+    # === language model 側 ===
+    # まず埋め込みと回転埋め込み、最初の層は GPU:0
     'language_model.model.embed_tokens': 'cuda:0',
     'language_model.model.rotary_emb': 'cuda:0',
     'language_model.model.layers.0': 'cuda:0',
+
+    # 次の層の一部を GPU:2 に
     'language_model.model.layers.1': 'cuda:2',
     'language_model.model.layers.2': 'cuda:2',
     'language_model.model.layers.3': 'cuda:2',
@@ -91,6 +106,8 @@ device_map = {
     'language_model.model.layers.14': 'cuda:2',
     'language_model.model.layers.15': 'cuda:2',
     'language_model.model.layers.16': 'cuda:2',
+
+    # 残りを GPU:3 に
     'language_model.model.layers.17': 'cuda:3',
     'language_model.model.layers.18': 'cuda:3',
     'language_model.model.layers.19': 'cuda:3',
@@ -108,8 +125,6 @@ device_map = {
     'language_model.model.layers.31': 'cuda:3',
     'language_model.model.norm': 'cuda:3',
     'language_model.lm_head': 'cuda:3',
-    'context_tower.tower.model.norm': 'cuda:0',
-    'context_tower.tower.lm_head': 'cuda:0',
 }
 
 torch.manual_seed(42)
