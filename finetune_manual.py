@@ -41,6 +41,7 @@ if dist.get_rank() == 0:
 
 device_map = {
     'context_tower.tower.model.embed_tokens': 'cuda:0',
+    'context_tower.tower.model.rotary_emb': 'cuda:0',
     'context_tower.tower.model.layers.0': 'cuda:0',
     'context_tower.tower.model.layers.1': 'cuda:0',
     'context_tower.tower.model.layers.2': 'cuda:0',
@@ -72,6 +73,7 @@ device_map = {
     'connector.linear_2': 'cuda:1',
     
     'language_model.model.embed_tokens': 'cuda:2',
+    'language_model.model.rotary_emb': 'cuda:2',
     'language_model.model.layers.0': 'cuda:2',
     'language_model.model.layers.1': 'cuda:2',
     'language_model.model.layers.2': 'cuda:2',
@@ -129,6 +131,7 @@ except:
 
 model = CcubedForConditionalGeneration.from_pretrained(
     model_name,
+    device_map=device_map,
     torch_dtype=torch.bfloat16,
     trust_remote_code=True,
     attn_implementation="flash_attention_2"
