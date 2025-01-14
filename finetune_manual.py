@@ -40,9 +40,9 @@ if dist.get_rank() == 0:
 """
 
 device_map = {
-    'context_tower.tower.model.embed_tokens': 'cuda:0',
-    'context_tower.tower.model.rotary_emb': 'cuda:0',
-    'context_tower.tower.model.layers.0': 'cuda:0',
+    'context_tower.tower.model.embed_tokens': 'cuda:1',
+    'context_tower.tower.model.rotary_emb': 'cuda:1',
+    'context_tower.tower.model.layers.0': 'cuda:1',
     'context_tower.tower.model.layers.1': 'cuda:1',
     'context_tower.tower.model.layers.2': 'cuda:1',
     'context_tower.tower.model.layers.3': 'cuda:1',
