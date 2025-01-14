@@ -65,9 +65,11 @@ device_map = {
     'context_tower.tower.model.layers.20': 'cuda:1',
     'context_tower.tower.model.layers.21': 'cuda:1',
     'context_tower.tower.model.layers.22': 'cuda:1',
-    'context_tower.tower.model.layers.23': 'cuda:0',
+    'context_tower.tower.model.layers.23': 'cuda:1',
 
-    'connector.dynamic_pooling': 'cuda:0',
+    'connector.dynamic_pooling.imp_estim_attn': 'cuda:1',
+    'connector.dynamic_pooling.scale_param': 'cuda:1',
+    'connector.dynamic_pooling.size_estim_attn': 'cuda:1',
     'connector.linear_1': 'cuda:0',
     'connector.act': 'cuda:0',
     'connector.linear_2': 'cuda:0',
