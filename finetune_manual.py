@@ -106,8 +106,8 @@ device_map = {
     'language_model.model.layers.31': 'cuda:3',
     'language_model.model.norm': 'cuda:3',
     'language_model.lm_head': 'cuda:3',
-    'context_tower.tower.model.norm': 'cuda:0',
-    'context_tower.tower.lm_head': 'cuda:1',
+    # 'context_tower.tower.model.norm': 'cuda:0',
+    # 'context_tower.tower.lm_head': 'cuda:1',
 }
 
 torch.manual_seed(42)
@@ -130,7 +130,6 @@ except:
 model = CcubedForConditionalGeneration.from_pretrained(
     model_name,
     torch_dtype=torch.bfloat16,
-    device_map=device_map,
     trust_remote_code=True,
     attn_implementation="flash_attention_2"
 )
@@ -164,6 +163,11 @@ for name, param in model.named_parameters():
     if param.requires_grad:
         print(f"training param - {name}: {param.shape}")
 
+# モジュールを対応するGPUに移動
+for name, module in model.named_modules():
+    if name in device_map:
+        device = device_map[name]
+        module.to(device)
 
 if phase == 1:
     dataset = load_dataset("sudy-super/c_cubed_restoration_tokenized_98304")
@@ -413,7 +417,7 @@ args = TrainingArguments(
     seed=42,
     bf16=True,  # bf16を有効化
     bf16_full_eval=True,
-    deepspeed="ds_config_mn.json",  # DeepSpeed設定ファイルの指定
+    # deepspeed="ds_config_mn.json",  # DeepSpeed設定ファイルの指定
     gradient_checkpointing=True,
     optim="adamw_torch_fused",
     dataloader_pin_memory=False,
