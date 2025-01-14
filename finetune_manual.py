@@ -399,9 +399,26 @@ class CustomTrainer(Trainer):
         try:
             # 通常のトレーニングステップを実行
             loss = super().training_step(model, inputs, optimizer)
+        
+            input_ids = inputs.get('input_ids', None)
+            context_input_ids = inputs.get('context_input_ids', None)
+            if input_ids is not None:
+                if isinstance(input_ids, torch.Tensor):
+                    text_lengths = [input_ids.size(1)]
+                else:
+                    text_lengths = [len(ids) for ids in input_ids]
+                print(f"Text lengths: {text_lengths}")
+            if context_input_ids is not None:
+                if isinstance(context_input_ids, torch.Tensor):
+                    context_lengths = [context_input_ids.size(1)]
+                else:
+                    context_lengths = [len(ids) for ids in context_input_ids]
+                print(f"Context lengths: {context_lengths}")
+            else:
+                print("Error occurred during training but could not retrieve input_ids or context_input_ids")
+            
             return loss
         except Exception as e:
-            # エラーが発生した場合、データの長さを出力
             input_ids = inputs.get('input_ids', None)
             context_input_ids = inputs.get('context_input_ids', None)
             if input_ids is not None:
@@ -418,6 +435,7 @@ class CustomTrainer(Trainer):
                 print(f"Error occurred during training on batch with context lengths: {context_lengths}")
             else:
                 print("Error occurred during training but could not retrieve input_ids or context_input_ids")
+            # エラーが発生した場合、データの長さを出力    
             # 例外を再度発生させる
             raise e
 
