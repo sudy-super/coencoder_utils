@@ -39,6 +39,75 @@ if dist.get_rank() == 0:
         raise ValueError("Invalid phase value. Must be 1 or 2.")
 """
 
+device_map = {
+    'context_tower.tower.embed_tokens': 'cuda:0',
+    'context_tower.tower.layers.0': 'cuda:0',
+    'context_tower.tower.layers.1': 'cuda:0',
+    'context_tower.tower.layers.2': 'cuda:0',
+    'context_tower.tower.layers.3': 'cuda:0',
+    'context_tower.tower.layers.4': 'cuda:0',
+    'context_tower.tower.layers.5': 'cuda:0',
+    'context_tower.tower.layers.6': 'cuda:0',
+    'context_tower.tower.layers.7': 'cuda:0',
+    'context_tower.tower.layers.8': 'cuda:0',
+    'context_tower.tower.layers.9': 'cuda:0',
+    'context_tower.tower.layers.10': 'cuda:0',
+    'context_tower.tower.layers.11': 'cuda:0',
+    'context_tower.tower.layers.12': 'cuda:0',
+    'context_tower.tower.layers.13': 'cuda:0',
+    'context_tower.tower.layers.14': 'cuda:0',
+    'context_tower.tower.layers.15': 'cuda:0',
+    'context_tower.tower.layers.16': 'cuda:0',
+    'context_tower.tower.layers.17': 'cuda:0',
+    'context_tower.tower.layers.18': 'cuda:0',
+    'context_tower.tower.layers.19': 'cuda:0',
+    'context_tower.tower.layers.20': 'cuda:0',
+    'context_tower.tower.layers.21': 'cuda:0',
+    'context_tower.tower.layers.22': 'cuda:0',
+    'context_tower.tower.layers.23': 'cuda:0',
+
+    'connector.dynamic_pooling': 'cuda:1',
+    'connector.linear_1': 'cuda:1',
+    'connector.act': 'cuda:1',
+    'connector.linear_2': 'cuda:1',
+    
+    'language_model.model.embed_tokens': 'cuda:2',
+    'language_model.model.layers.0': 'cuda:2',
+    'language_model.model.layers.1': 'cuda:2',
+    'language_model.model.layers.2': 'cuda:2',
+    'language_model.model.layers.3': 'cuda:2',
+    'language_model.model.layers.4': 'cuda:2',
+    'language_model.model.layers.5': 'cuda:2',
+    'language_model.model.layers.6': 'cuda:2',
+    'language_model.model.layers.7': 'cuda:2',
+    'language_model.model.layers.8': 'cuda:2',
+    'language_model.model.layers.9': 'cuda:2',
+    'language_model.model.layers.10': 'cuda:2',
+    'language_model.model.layers.11': 'cuda:2',
+    'language_model.model.layers.12': 'cuda:2',
+    'language_model.model.layers.13': 'cuda:2',
+    'language_model.model.layers.14': 'cuda:2',
+    'language_model.model.layers.15': 'cuda:2',
+    'language_model.model.layers.16': 'cuda:2',
+    'language_model.model.layers.17': 'cuda:3',
+    'language_model.model.layers.18': 'cuda:3',
+    'language_model.model.layers.19': 'cuda:3',
+    'language_model.model.layers.20': 'cuda:3',
+    'language_model.model.layers.21': 'cuda:3',
+    'language_model.model.layers.22': 'cuda:3',
+    'language_model.model.layers.23': 'cuda:3',
+    'language_model.model.layers.24': 'cuda:3',
+    'language_model.model.layers.25': 'cuda:3',
+    'language_model.model.layers.26': 'cuda:3',
+    'language_model.model.layers.27': 'cuda:3',
+    'language_model.model.layers.28': 'cuda:3',
+    'language_model.model.layers.29': 'cuda:3',
+    'language_model.model.layers.30': 'cuda:3',
+    'language_model.model.layers.31': 'cuda:3',
+    'language_model.model.norm': 'cuda:3',
+    'language_model.lm_head': 'cuda:3',
+}
+
 torch.manual_seed(42)
 torch.cuda.manual_seed(42)
 
@@ -59,6 +128,7 @@ except:
 model = CcubedForConditionalGeneration.from_pretrained(
     model_name,
     torch_dtype=torch.bfloat16,
+    device_map=device_map,
     trust_remote_code=True,
     attn_implementation="flash_attention_2"
 )
