@@ -166,12 +166,16 @@ for name, param in model.named_parameters():
     if param.requires_grad:
         print(f"training param - {name}: {param.shape}")
 
+"""
 # モジュールを対応するGPUに移動
 for name, module in model.named_modules():
     if name in device_map:
         device = device_map[name]
         module.to(device)
+"""
 
+model = dispatch_model(model, device_map=device_map)
+                       
 if phase == 1:
     dataset = load_dataset("sudy-super/c_cubed_restoration_tokenized_98304")
 
