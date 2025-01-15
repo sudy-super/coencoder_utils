@@ -438,7 +438,7 @@ class CcubedForConditionalGeneration(CcubedPreTrainedModel):
             config.text_config,
             attn_implementation="flash_attention_2" if is_flash_attn_2_available() else "eager"
         )
-        self.langage_model.gradient_checkpointing_enable()
+        self.language_model.gradient_checkpointing_enable()
 
         self.vocab_size = config.text_config.vocab_size
         self.ignore_index = config.ignore_index if hasattr(config, 'ignore_index') else -100
