@@ -41,9 +41,9 @@ if dist.get_rank() == 0:
 
 device_map = {
     # === context tower (ほぼ GPU:1 に集約) ===
-    'context_tower.tower.model.embed_tokens': 'cuda:1',
-    'context_tower.tower.model.rotary_emb': 'cuda:1',
-    'context_tower.tower.model.layers.0': 'cuda:1',
+    'context_tower.tower.model.embed_tokens': 'cuda:0',
+    'context_tower.tower.model.rotary_emb': 'cuda:0',
+    'context_tower.tower.model.layers.0': 'cuda:0',
     'context_tower.tower.model.layers.1': 'cuda:0',
     'context_tower.tower.model.layers.2': 'cuda:0',
     'context_tower.tower.model.layers.3': 'cuda:0',
@@ -79,14 +79,14 @@ device_map = {
     # dynamic_pooling の計算結果を線形変換するモジュールたち
     # こちらを同じ GPU:2 にまとめれば転送を1回にできますが、
     # もしメモリ都合等で GPU:0 に残したい場合は下記を 'cuda:0' とし、転送が2回発生してもよい構成にします。
-    'connector.linear_1': 'cuda:1',
-    'connector.act': 'cuda:1',
-    'connector.linear_2': 'cuda:1',
+    'connector.linear_1': 'cuda:2',
+    'connector.act': 'cuda:2',
+    'connector.linear_2': 'cuda:2',
 
     # === language model 側 ===
     # まず埋め込みと回転埋め込み、最初の層は GPU:0
-    'language_model.model.embed_tokens': 'cuda:1',
-    'language_model.model.rotary_emb': 'cuda:1',
+    'language_model.model.embed_tokens': 'cuda:2',
+    'language_model.model.rotary_emb': 'cuda:2',
     'language_model.model.layers.0': 'cuda:2',
 
     # 次の層の一部を GPU:2 に
