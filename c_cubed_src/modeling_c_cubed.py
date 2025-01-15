@@ -178,8 +178,8 @@ class CcubedDynamicFlashAttention2(CcubedDynamicAttention):
         value_states = value_states.view(bsz, seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
 
         # Repeat key and value states for multi-head attention
-        key_states = repeat_kv(key_states, self.num_key_value_groups)
-        value_states = repeat_kv(value_states, self.num_key_value_groups)
+        # key_states = repeat_kv(key_states, self.num_key_value_groups)
+        # value_states = repeat_kv(value_states, self.num_key_value_groups)
 
         input_dtype = query_states.dtype
         if input_dtype == torch.float32:
