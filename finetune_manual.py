@@ -70,8 +70,8 @@ device_map = {
     'context_tower.tower.model.layers.23': 'cuda:0',
 
     # Context Tower の最終処理(norm, lm_head) は GPU:0 に
-    'context_tower.tower.model.norm': 'cuda:1',
-    'context_tower.tower.lm_head': 'cuda:1',
+    'context_tower.tower.model.norm': 'cuda:0',
+    'context_tower.tower.lm_head': 'cuda:0',
 
     # === connector部分 ===
     # dynamic_pooling を隔離したいので GPU:2 に
