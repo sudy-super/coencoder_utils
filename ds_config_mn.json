@@ -46,6 +46,12 @@
             "cos_min_ratio": 0.1
         }
     },
+    "pipeline": {
+        "pipeline_model_parallel_size": 4,
+        "activation_checkpoint_interval": 1,
+        "prescale_gradients": true,
+        "stages": 4
+    },
     "data_parallel_size": 1,
     "activation_checkpointing": {
         "partition_activations": true,

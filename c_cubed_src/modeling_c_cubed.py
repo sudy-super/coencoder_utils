@@ -378,7 +378,7 @@ class CcubedContextTower(nn.Module):
             config.context_config,
             attn_implementation="flash_attention_2" if is_flash_attn_2_available() else "eager"
         )
-        self.tower = cce_patch(self.tower, impl="cce", reduction="mean", use_kahan=True, gradient_accumulation_steps=4)
+        self.tower.gradient_checkpointing_enable()
         self.select_layer = config.context_feature_layer
     
     def feature_select(self, llm_outputs):
@@ -439,7 +439,7 @@ class CcubedForConditionalGeneration(CcubedPreTrainedModel):
             config.text_config,
             attn_implementation="flash_attention_2" if is_flash_attn_2_available() else "eager"
         )
-        self.language_model = cce_patch(self.language_model, impl="cce", reduction="mean", use_kahan=True, gradient_accumulation_steps=4)
+        self.langage_model.gradient_checkpointing_enable()
 
         self.vocab_size = config.text_config.vocab_size
         self.ignore_index = config.ignore_index if hasattr(config, 'ignore_index') else -100

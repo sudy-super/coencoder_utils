@@ -1,7 +1,9 @@
 import random
-from torch.utils.data import Dataset, Subset
+from torch.utils.data import Dataset, Subset, DataLoader
 from transformers import Trainer, TrainingArguments, logging
 import torch
+import torch.distributed as dist
+from torch.distributed.pipelining import pipe_split, pipeline, PipelineStage, ScheduleGPipe
 from datasets import load_dataset
 import wandb
 from safetensors.torch import load_file
@@ -21,23 +23,11 @@ import time
 import psutil
 from datetime import datetime
 
-import torch.distributed as dist
-
 phase = 1
-"""
-# DeepSpeedがtorch.distributedの初期化を行うため、その後でランクを取得します
-dist.init_process_group(backend='nccl')  # 必要に応じてバックエンドを指定
 
-# グローバルランク0のプロセスのみでWandBを初期化
-
-if dist.get_rank() == 0:
-    if phase == 1:
-        wandb.init(project="c_cubed_phase1", name="1e-3_c_cubed_connector", entity="sudy_super")
-    elif phase == 2:
-        wandb.init(project="c_cubed_phase2", name="2e-5_c_cubed_lm", entity="sudy_super")
-    else:
-        raise ValueError("Invalid phase value. Must be 1 or 2.")
-"""
+# Initialize distributed environment for pipeline parallel
+if not dist.is_initialized():
+    dist.init_process_group(backend='nccl')
 
 torch.manual_seed(42)
 torch.cuda.manual_seed(42)
@@ -63,7 +53,6 @@ model = CcubedForConditionalGeneration.from_pretrained(
     attn_implementation="flash_attention_2"
 )
 
-
 tokenizer.text_tokenizer.pad_token = tokenizer.text_tokenizer.eos_token
 tokenizer.context_tokenizer.pad_token = tokenizer.context_tokenizer.eos_token
 tokenizer.text_tokenizer.pad_token_id = tokenizer.text_tokenizer.eos_token_id
@@ -88,68 +77,128 @@ for param in model.language_model.parameters():
     else:
         raise ValueError("Invalid phase value. Must be 1 or 2.")
 
-for name, param in model.named_parameters():
-    if param.requires_grad:
-        print(f"training param - {name}: {param.shape}")
+# パイプライン並列化の準備
+device_ids = list(range(torch.cuda.device_count()))
+if len(device_ids) < 4:
+    raise ValueError("4-GPU pipeline parallelismには4台以上のGPUが必要です")
 
+
+# モデルの各ステージを手動で定義
+class FirstStage(nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.embed_tokens = model.context_tower.tower.model.embed_tokens
+        self.layers = nn.ModuleList(model.context_tower.tower.model.layers[:12])
+        
+    def forward(self, context_input_ids, context_attention_mask=None):
+        x = self.embed_tokens(context_input_ids)
+        for layer in self.layers:
+            x = layer(x)
+        return x
+
+class SecondStage(nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.layers = nn.ModuleList(model.context_tower.tower.model.layers[12:])
+        self.norm = model.context_tower.tower.model.norm
+        self.lm_head = model.context_tower.tower.lm_head
+        
+    def forward(self, hidden_states):
+        for layer in self.layers:
+            hidden_states = layer(hidden_states)
+        hidden_states = self.norm(hidden_states)
+        return self.lm_head(hidden_states)
+
+class ThirdStage(nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.connector = model.connector
+        
+    def forward(self, hidden_states):
+        return self.connector(hidden_states)
+
+class FourthStage(nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.language_model = model.language_model
+        
+    def forward(self, past_key_values, input_ids=None, attention_mask=None, labels=None):
+        return self.language_model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            labels=labels,
+            past_key_values=past_key_values
+        )
+
+# パイプラインステージの作成
+def create_pipeline_stage(model, stage_index):
+    device = f"cuda:{stage_index}"
+    if stage_index == 0:
+        stage_module = FirstStage(model)
+    elif stage_index == 1:
+        stage_module = SecondStage(model)
+    elif stage_index == 2:
+        stage_module = ThirdStage(model)
+    elif stage_index == 3:
+        stage_module = FourthStage(model)
+    else:
+        raise ValueError(f"Invalid stage index: {stage_index}")
+        
+    # 例の入力を作成
+    if stage_index == 0:
+        example_input = torch.ones(1, 512, dtype=torch.long)
+        stage = PipelineStage(
+            stage_module, 
+            stage_index, 
+            4,  # num_stages 
+            device,
+            input_args=(example_input,),
+        )
+    else:
+        example_input = torch.ones(1, 512, model.config.hidden_size)
+        stage = PipelineStage(
+            stage_module,
+            stage_index,
+            4,  # num_stages
+            device,
+            input_args=(example_input,),
+        )
+    
+    return stage
+
+# パイプラインステージの初期化
+stage_index = dist.get_rank()
+stage = create_pipeline_stage(model, stage_index)
+
+# スケジューラーの設定
+schedule = ScheduleGPipe(
+    stage=stage,
+    n_microbatches=4,  # マイクロバッチの数
+)
 
 if phase == 1:
     dataset = load_dataset("sudy-super/c_cubed_restoration_tokenized_98304")
-
-    # データセットの取得
     train_data_phase1 = dataset["train"]
     val_data_phase1 = dataset["validation"]
-
     train_data_phase1 = train_data_phase1.shuffle(seed=42)
     val_data_phase1 = val_data_phase1.shuffle(seed=42)
-
-    # データセットの件数をカウントして表示
     print(f"Number of train samples (phase1): {len(train_data_phase1)}")
     print(f"Number of validation samples (phase1): {len(val_data_phase1)}")
 elif phase == 2:
     dataset = load_dataset("sudy-super/c_cubed_finetune_tokenized")
-
-    # データセットの取得
     train_data_phase2 = dataset["train"]
     val_data_phase2 = dataset["validation"]
-
     train_data_phase2 = train_data_phase2.shuffle(seed=42)
     val_data_phase2 = val_data_phase2.shuffle(seed=42)
-
     print(f"Number of train samples (phase2): {len(train_data_phase2)}")
     print(f"Number of validation samples (phase2): {len(val_data_phase2)}")
 
-
-# train_data_sorted = train_data_used.sort('length')
-
 class DataCollatorAssistantWithContext:
-    """
-    1) context_input_ids, context_attention_mask を含む入力をパディング・整形し、
-       コンテキストがすべて pad のときはそれを削除、部分的に pad のときは attention_mask を 0 に。
-    2) メインテキスト (input_ids, attention_mask) もパディングし、labels もパディング。
-    3) 「<|im_start|>assistant ~ <|im_end|>」以外のトークンを labels = -100 に置き換える。
-    """
-
     def __init__(self, tokenizer):
-        """
-        tokenizer には以下のような想定:
-            tokenizer.context_tokenizer
-            tokenizer.text_tokenizer
-            または context / text 共通で tokenizer を流用するなら
-            tokenizer.pad(...) で分けて使ってもOK。
-
-        ここでは例として tokenizer.context_tokenizer, tokenizer.text_tokenizer を使う想定。
-        """
         self.tokenizer = tokenizer
-
-        # 以下は「アシスタント部分のみを学習対象とする」ための特殊トークン設定
         self.start_token_id = tokenizer.text_tokenizer.convert_tokens_to_ids("<|im_start|>")
-        self.end_token_id   = tokenizer.text_tokenizer.convert_tokens_to_ids("<|im_end|>")
-
-        # "assistant" のトークン ID (必要に応じて変更)
+        self.end_token_id = tokenizer.text_tokenizer.convert_tokens_to_ids("<|im_end|>")
         self.assistant_token_id = 77091
-
-        # 改行のトークンID (必要に応じて変更)
         self.newline_token_id = 198
 
     def __call__(self, features):
@@ -298,44 +347,67 @@ class DataCollatorAssistantWithContext:
 
         return batch
 
+class PipelineParallelDataCollator(DataCollatorAssistantWithContext):
+    def __call__(self, features):
+        batch = super().__call__(features)
+        # テンソルを適切なGPUに配置
+        for key, value in batch.items():
+            if isinstance(value, torch.Tensor):
+                if 'context' in key:
+                    if dist.get_rank() in [0, 1]:  # context tower stages
+                        batch[key] = value.cuda(dist.get_rank())
+                elif key in ['input_ids', 'attention_mask']:
+                    if dist.get_rank() == 2:  # connector stage
+                        batch[key] = value.cuda(2)
+                else:  # labels
+                    if dist.get_rank() == 3:  # language model stage
+                        batch[key] = value.cuda(3)
+        return batch
 
-"""
-# 最初のバッチのトークン数を出力
-first_batch = train_data[:1]
-for i in range(len(first_batch)):
-    context_tokens_count = len(first_batch['context_input_ids'][i])
-    text_tokens_count = len(first_batch['input_ids'][i])
-    print(f"Context tokens count: {context_tokens_count}")
-    print(f"Text tokens count: {text_tokens_count}")
-"""
+# マイクロバッチの例を作成
+example_batch = next(iter(DataLoader(train_data_phase1 if phase == 1 else train_data_phase2, batch_size=1)))
 
-class CustomTrainer(Trainer):
+# パイプラインの作成
+pipe = pipeline(
+    module=model,
+    mb_args=(example_batch,),
+)
+
+# 各ランクのステージモジュールを取得とGPipeスケジュールの作成
+stage_idx = dist.get_rank()
+stage = pipe.build_stage(stage_idx, f"cuda:{stage_idx}")
+schedule = ScheduleGPipe(
+    stage=stage,
+    n_microbatches=4,  # マイクロバッチの数を4に設定
+)
+
+class PipelineParallelTrainer(Trainer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.args.pipeline_parallel = True
+    
     def training_step(self, model, inputs, optimizer=None):
         try:
-            # 通常のトレーニングステップを実行
-            loss = super().training_step(model, inputs, optimizer)
-        
-            input_ids = inputs.get('input_ids', None)
-            context_input_ids = inputs.get('context_input_ids', None)
-            if input_ids is not None:
-                if isinstance(input_ids, torch.Tensor):
-                    text_lengths = [input_ids.size(1)]
-                else:
-                    text_lengths = [len(ids) for ids in input_ids]
-                print(f"Text lengths: {text_lengths}")
-            if context_input_ids is not None:
-                if isinstance(context_input_ids, torch.Tensor):
-                    context_lengths = [context_input_ids.size(1)]
-                else:
-                    context_lengths = [len(ids) for ids in context_input_ids]
-                print(f"Context lengths: {context_lengths}")
+            # パイプラインスケジュールによる処理
+            if dist.get_rank() == 0:
+                outputs = self.schedule.step(inputs)
             else:
-                print("Error occurred during training but could not retrieve input_ids or context_input_ids")
+                outputs = self.schedule.step()
             
+            loss = outputs.loss
+            if self.args.gradient_accumulation_steps > 1:
+                loss = loss / self.args.gradient_accumulation_steps
+            
+            # メモリ使用量のログ記録
+            if self.args.local_rank == 0 and self.state.global_step % 100 == 0:
+                for i in range(torch.cuda.device_count()):
+                    mem = torch.cuda.memory_allocated(i) / 1024**3
+                    print(f"GPU {i} memory usage: {mem:.2f} GB")
+                    
             return loss
+            
         except Exception as e:
+            print(f"Pipeline parallel training step error: {str(e)}")
             input_ids = inputs.get('input_ids', None)
             context_input_ids = inputs.get('context_input_ids', None)
             if input_ids is not None:
@@ -352,10 +424,7 @@ class CustomTrainer(Trainer):
                 print(f"Error occurred during training on batch with context lengths: {context_lengths}")
             else:
                 print("Error occurred during training but could not retrieve input_ids or context_input_ids")
-            # エラーが発生した場合、データの長さを出力    
-            # 例外を再度発生させる
             raise e
-
 
 # Hugging Faceの進捗バーを強制的に有効化
 logging.set_verbosity_info()
@@ -366,54 +435,53 @@ args = TrainingArguments(
     num_train_epochs=1,
     per_device_train_batch_size=1,
     per_device_eval_batch_size=1,
-    gradient_accumulation_steps=2 if phase==2 else 4, # Phase1: 2, Phase2: 1
-    learning_rate=2e-5 if phase==2 else 1e-3, # Phase1: 1e-3, Phase2: 2e-5
-    # label_smoothing_factor=0.1 if phase==2 else 0.0,
+    gradient_accumulation_steps=2 if phase==2 else 4,
+    learning_rate=2e-5 if phase==2 else 1e-3,
     adam_beta2=0.95,
     weight_decay=0.1,
     lr_scheduler_type="cosine",
     warmup_ratio=0.03,
-    disable_tqdm=False,  # tqdmの進捗バーを有効化
-    logging_steps=1,  # ロギング頻度を設定
+    disable_tqdm=False,
+    logging_steps=1,
     log_level="info",
     logging_strategy="steps",
     eval_strategy="steps",
     save_strategy="steps",
-    eval_steps=50, # Phase1: 73, Phase2: 73
-    save_steps=2000, # Phase1: 949, Phase2: 2506
+    eval_steps=50,
+    save_steps=2000,
     output_dir="output",
     report_to="wandb",
     save_total_limit=3,
     push_to_hub=False,
     seed=42,
-    bf16=True,  # bf16を有効化
+    bf16=True,
     bf16_full_eval=True,
-    deepspeed="ds_config_mn.json",  # DeepSpeed設定ファイルの指定
-    gradient_checkpointing=True,
+    deepspeed="ds_config_mn.json",
+    gradient_checkpointing=False,  # パイプライン並列を使用するため無効化
+    pipeline_parallel_degree=4,    # パイプライン並列のステージ数
+    distributed_state="pipeline_parallel",
     optim="adamw_torch_fused",
     dataloader_pin_memory=False,
     dataloader_num_workers=2,
     local_rank=int(os.environ.get("LOCAL_RANK", -1)),
-    #ddp_timeout=7200,
-    # group_by_length=True,
 )
 
-# Trainerの設定
-trainer = CustomTrainer(
-    model=model,
+# トレーナーの初期化
+trainer = PipelineParallelTrainer(
+    model=stage,  # パイプラインステージを使用
     args=args,
     train_dataset=train_data_phase2 if phase == 2 else train_data_phase1,
     eval_dataset=val_data_phase2 if phase == 2 else val_data_phase1,
-    data_collator=DataCollatorAssistantWithContext(tokenizer), # data_collator,
+    data_collator=PipelineParallelDataCollator(tokenizer),
 )
 
 print("[INFO] Trainer initialized successfully.")
-# トレーニング開始
 trainer.train()
 
-for name, param in model.connector.named_parameters():
-    if param.requires_grad:
-        print(f"trained param - {name}: {param.shape}")
-
-# 学習済みモデルの保存
-model.save_pretrained("c3_output_model", safe_serialization=True)
+# 学習済みのパラメータ確認とモデルの保存は最後のステージでのみ実行
+if dist.get_rank() == 3:
+    for name, param in model.connector.named_parameters():
+        if param.requires_grad:
+            print(f"trained param - {name}: {param.shape}")
+    
+    model.save_pretrained("c3_output_model", safe_serialization=True)
