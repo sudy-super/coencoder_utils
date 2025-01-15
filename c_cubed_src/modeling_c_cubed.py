@@ -154,7 +154,7 @@ class CcubedDynamicFlashAttention2(CcubedDynamicAttention):
     def __init__(self, config: CcubedConfig):
         super().__init__(config)
         self._flash_attn_uses_top_left_mask = not is_flash_attn_greater_or_equal_2_10()
-        self.is_causal = False  # Assuming non-causal attention for this context
+        self.is_causal = True  # Assuming non-causal attention for this context
         self.config = config
 
     def forward(
