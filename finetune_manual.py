@@ -87,7 +87,7 @@ device_map = {
     # まず埋め込みと回転埋め込み、最初の層は GPU:0
     'language_model.model.embed_tokens': 'cuda:1',
     'language_model.model.rotary_emb': 'cuda:1',
-    'language_model.model.layers.0': 'cuda:1',
+    'language_model.model.layers.0': 'cuda:2',
 
     # 次の層の一部を GPU:2 に
     'language_model.model.layers.1': 'cuda:2',
