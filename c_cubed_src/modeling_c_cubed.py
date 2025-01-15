@@ -25,7 +25,6 @@ from transformers.utils import (
 )
 from transformers import AutoTokenizer, AutoModel, AutoModelForCausalLM
 from .configuration_c_cubed import CcubedConfig
-from cut_cross_entropy.transformers import cce_patch
 
 
 logger = logging.get_logger(__name__)
