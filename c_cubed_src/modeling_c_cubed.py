@@ -25,6 +25,7 @@ from transformers.utils import (
 )
 from transformers import AutoTokenizer, AutoModel, AutoModelForCausalLM
 from .configuration_c_cubed import CcubedConfig
+from cut_cross_entropy.transformers import cce_patch
 
 
 logger = logging.get_logger(__name__)
@@ -239,9 +240,9 @@ class CcubedDynamicWeightedAvgPool1d(nn.Module):
     def __init__(self, config, output_size_min=32, output_size_max=131072):
         super().__init__()
         # Attention mechanism for estimating output size
-        self.size_estim_attn = CcubedDynamicAttention(config) # CcubedDynamicFlashAttention2(config)
+        self.size_estim_attn = CcubedDynamicFlashAttention2(config) # CcubedDynamicAttention(config)
         # Attention mechanism for weighted pooling
-        self.imp_estim_attn = CcubedDynamicAttention(config) # CcubedDynamicFlashAttention2(config)
+        self.imp_estim_attn = CcubedDynamicFlashAttention2(config) # CcubedDynamicAttention(config)
         self.output_size_min = output_size_min
         self.output_size_max = (
             config.context_config.max_position_embeddings if config.context_config.max_position_embeddings is not None else output_size_max
@@ -377,6 +378,7 @@ class CcubedContextTower(nn.Module):
             config.context_config,
             attn_implementation="flash_attention_2" if is_flash_attn_2_available() else "eager"
         )
+        self.tower = cce_patch(self.tower, impl="cce", reduction="mean", use_kahan=True, gradient_accumulation_steps=4)
         self.select_layer = config.context_feature_layer
     
     def feature_select(self, llm_outputs):
@@ -437,6 +439,7 @@ class CcubedForConditionalGeneration(CcubedPreTrainedModel):
             config.text_config,
             attn_implementation="flash_attention_2" if is_flash_attn_2_available() else "eager"
         )
+        self.language_model = cce_patch(self.language_model, impl="cce", reduction="mean", use_kahan=True, gradient_accumulation_steps=4)
 
         self.vocab_size = config.text_config.vocab_size
         self.ignore_index = config.ignore_index if hasattr(config, 'ignore_index') else -100
