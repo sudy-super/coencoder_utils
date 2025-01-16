@@ -10,8 +10,10 @@ import torch
 import torch.utils.checkpoint
 from torch import nn
 
-from transformers import PreTrainedModel
+from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS, PreTrainedModel
 from transformers.activations import ACT2FN
+from transformers.cache_utils import Cache, DynamicCache, StaticCache
+from transformers.processing_utils import Unpack
 from transformers.image_processing_utils import select_best_resolution
 from transformers.modeling_outputs import ModelOutput
 from transformers.modeling_flash_attention_utils import FlashAttentionKwargs, _flash_attention_forward
@@ -98,6 +100,8 @@ class CcubedDynamicAttention(nn.Module):
         self.head_dim = getattr(config.context_config, "head_dim", self.hidden_size // self.num_heads)
         self.num_key_value_heads = config.context_config.num_key_value_heads
         self.num_key_value_groups = self.num_heads // self.num_key_value_heads
+        self.scaling = self.head_dim ** -0.5
+        self.attention_dropout = getattr(self.config.context_config, "attention_dropout", 0.0)
 
         # Query, Key, Value, and Output Projections
         self.q_proj = nn.Linear(self.hidden_size, self.num_heads * self.head_dim, bias=False)
@@ -153,7 +157,6 @@ class CcubedDynamicAttention(nn.Module):
 class CcubedDynamicFlashAttention2(CcubedDynamicAttention):
     def __init__(self, config: CcubedConfig):
         super().__init__(config)
-        self._flash_attn_uses_top_left_mask = not is_flash_attn_greater_or_equal_2_10()
         self.is_causal = False  # Assuming non-causal attention for this context
         self.config = config
 
@@ -162,71 +165,38 @@ class CcubedDynamicFlashAttention2(CcubedDynamicAttention):
         hidden_states: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         output_attentions: bool = False,
+        **kwargs: Unpack[FlashAttentionKwargs],
     ):
-        output_attentions = False
+        input_shape = hidden_states.shape[:-1]
+        hidden_shape = (*input_shape, -1, self.head_dim)
 
-        # Get input dimensions
-        bsz, seq_len, hidden_size = hidden_states.size()
-        q_len = seq_len
+        query_states = self.q_proj(hidden_states).view(hidden_shape).transpose(1, 2)
+        key_states = self.k_proj(hidden_states).view(hidden_shape).transpose(1, 2)
+        value_states = self.v_proj(hidden_states).view(hidden_shape).transpose(1, 2)
 
-        query_states = self.q_proj(hidden_states)
-        key_states = self.k_proj(hidden_states)
-        value_states = self.v_proj(hidden_states)
+        sliding_window = None
+        if (
+            self.config.use_sliding_window
+            and getattr(self.config, "sliding_window", None) is not None
+        ):
+            sliding_window = self.config.sliding_window
+        
+        attention_interface = ALL_ATTENTION_FUNCTIONS[self.config._attn_implementation]
 
-        query_states = query_states.view(bsz, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
-        key_states = key_states.view(bsz, seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
-        value_states = value_states.view(bsz, seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
-
-        # Repeat key and value states for multi-head attention
-        # key_states = repeat_kv(key_states, self.num_key_value_groups)
-        # value_states = repeat_kv(value_states, self.num_key_value_groups)
-
-        input_dtype = query_states.dtype
-        if input_dtype == torch.float32:
-            if torch.is_autocast_enabled():
-                target_dtype = torch.get_autocast_gpu_dtype()
-            # Handle the case where the model is quantized
-            elif hasattr(self.config, "_pre_quantization_dtype"):
-                target_dtype = self.config._pre_quantization_dtype
-            else:
-                target_dtype = self.q_proj.weight.dtype
-
-            logger.warning_once(
-                f"The input hidden states seem to be silently casted in float32, which might be related to"
-                f" upcasted embedding or layer norm layers in float32. Casting back the input to {target_dtype}."
-            )
-
-            query_states = query_states.to(target_dtype)
-            key_states = key_states.to(target_dtype)
-            value_states = value_states.to(target_dtype)
-
-        # Define attention_mask assuming all positions are valid
-        # because flash_attn does not support custom attention_mask
-        attention_mask = None
-
-        # Define other required variables
-        position_ids = None
-        dropout_rate = getattr(self.config.context_config, "attention_dropout", 0.0)
-
-        attn_output = _flash_attention_forward(
+        attn_output, attn_weights = attention_interface(
+            self,
             query_states,
             key_states,
             value_states,
             attention_mask,
-            q_len,
-            position_ids=position_ids,
-            dropout=dropout_rate,
-            sliding_window=getattr(self, "sliding_window", None),
-            use_top_left_mask=self._flash_attn_uses_top_left_mask,
-            is_causal=self.is_causal,
+            dropout=0.0 if not self.training else self.attention_dropout,
+            scaling=self.scaling,
+            sliding_window=sliding_window,  # main diff with Llama
+            **kwargs,
         )
 
-        attn_output = attn_output.reshape(bsz, q_len, -1).contiguous()
+        attn_output = attn_output.reshape(*input_shape, -1).contiguous()
         attn_output = self.o_proj(attn_output)
-
-        if not output_attentions:
-            attn_weights = None
-
         return attn_output, attn_weights
 
 
@@ -239,7 +209,7 @@ class CcubedDynamicWeightedAvgPool1d(nn.Module):
     def __init__(self, config, output_size_min=32, output_size_max=131072):
         super().__init__()
         # Attention mechanism for estimating output size
-        self.size_estim_attn = CcubedDynamicAttention(config)
+        self.size_estim_attn = CcubedDynamicFlashAttention2(config) # CcubedDynamicAttention(config)
         # Attention mechanism for weighted pooling
         self.imp_estim_attn = CcubedDynamicFlashAttention2(config) # CcubedDynamicAttention(config)
         self.output_size_min = output_size_min
