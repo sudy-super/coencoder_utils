@@ -94,7 +94,8 @@ class CcubedDynamicAttention(nn.Module):
 
     def __init__(self, config: CcubedConfig):
         super().__init__()
-
+    
+        self.config = config
         self.hidden_size = config.context_config.hidden_size
         self.num_heads = config.context_config.num_attention_heads
         self.head_dim = getattr(config.context_config, "head_dim", self.hidden_size // self.num_heads)
@@ -158,7 +159,6 @@ class CcubedDynamicFlashAttention2(CcubedDynamicAttention):
     def __init__(self, config: CcubedConfig):
         super().__init__(config)
         self.is_causal = False  # Assuming non-causal attention for this context
-        self.config = config
 
     def forward(
         self,
