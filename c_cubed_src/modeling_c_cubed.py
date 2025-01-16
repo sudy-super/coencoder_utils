@@ -175,10 +175,7 @@ class CcubedDynamicFlashAttention2(CcubedDynamicAttention):
         value_states = self.v_proj(hidden_states).view(hidden_shape).transpose(1, 2)
 
         sliding_window = None
-        if (
-            self.config.use_sliding_window
-            and getattr(self.config, "sliding_window", None) is not None
-        ):
+        if getattr(self.config, "sliding_window", None) is not None:
             sliding_window = self.config.sliding_window
         
         attention_interface = ALL_ATTENTION_FUNCTIONS[self.config._attn_implementation]
