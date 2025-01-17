@@ -94,7 +94,7 @@ for name, param in model.named_parameters():
 
 
 if phase == 1:
-    dataset = load_dataset("sudy-super/c_cubed_restoration_tokenized_98304")
+    dataset = load_dataset("sudy-super/c_cubed_restoration_tokenized_40k_98304")
 
     # データセットの取得
     train_data_phase1 = dataset["train"]
