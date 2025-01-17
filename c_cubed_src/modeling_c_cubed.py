@@ -691,8 +691,7 @@ class CcubedForConditionalGeneration(CcubedPreTrainedModel):
             num_logits_to_keep=num_logits_to_keep,
         )
 
-        logits = outputs[0]
-        print("Logits shape:", logits.shape)
+        logits = outputs.logits
 
         loss = None
         if labels is not None:
