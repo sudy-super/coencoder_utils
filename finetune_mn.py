@@ -422,6 +422,7 @@ args = TrainingArguments(
     learning_rate=2e-5 if phase==2 else 1e-3, # Phase1: 1e-3, Phase2: 2e-5
     # label_smoothing_factor=0.1 if phase==2 else 0.0,
     adam_beta2=0.95,
+    adam_epsilon=1e-15,
     weight_decay=0.1,
     lr_scheduler_type="cosine",
     warmup_ratio=0.03,
