@@ -315,7 +315,7 @@ class CustomTrainer(Trainer):
         self.step_context_lengths = []
         self.step_compressed_lengths = []
         
-    def _maybe_log_save_evaluate(self, tr_loss, model, trial, epoch, ignore_keys_for_eval, metrics=None, state=None, control=None):
+    def _maybe_log_save_evaluate(self, tr_loss, model, trial, epoch, ignore_keys_for_eval):
         """Log context length metrics to wandb before calling parent method"""
         if len(self.step_context_lengths) > 0 and len(self.step_compressed_lengths) > 0:
             # Calculate average lengths for this logging step
@@ -326,24 +326,16 @@ class CustomTrainer(Trainer):
             length_pairs = list(zip(self.step_context_lengths, self.step_compressed_lengths))
             compression_ratios = [comp/orig if orig > 0 else 0 for orig, comp in length_pairs]
             
-            # Create or update metrics dictionary
-            if metrics is None:
-                metrics = {}
-            
-            metrics.update({
-                "context_length/average": avg_context_length,
-                "context_length/compressed_average": avg_compressed_length,
-                "context_length/compression_ratio": sum(compression_ratios) / len(compression_ratios),
-                "context_length/max_original": max(self.step_context_lengths),
-                "context_length/max_compressed": max(self.step_compressed_lengths),
-                "context_length/min_original": min(self.step_context_lengths),
-                "context_length/min_compressed": min(self.step_compressed_lengths),
-            })
-            
-            # Create histogram data for wandb
-            if wandb.run is not None:
-                # Log histograms separately to avoid mixing with other metrics
+            # Log metrics directly to wandb
+            if self.args.report_to == ["wandb"] and wandb.run is not None:
                 wandb.log({
+                    "context_length/average": avg_context_length,
+                    "context_length/compressed_average": avg_compressed_length,
+                    "context_length/compression_ratio": sum(compression_ratios) / len(compression_ratios),
+                    "context_length/max_original": max(self.step_context_lengths),
+                    "context_length/max_compressed": max(self.step_compressed_lengths),
+                    "context_length/min_original": min(self.step_context_lengths),
+                    "context_length/min_compressed": min(self.step_compressed_lengths),
                     "context_length/original_dist": wandb.Histogram(self.step_context_lengths),
                     "context_length/compressed_dist": wandb.Histogram(self.step_compressed_lengths),
                     "context_length/compression_ratio_dist": wandb.Histogram(compression_ratios)
@@ -353,16 +345,7 @@ class CustomTrainer(Trainer):
             self.step_context_lengths = []
             self.step_compressed_lengths = []
             
-        return super()._maybe_log_save_evaluate(
-            tr_loss, 
-            model, 
-            trial, 
-            epoch, 
-            ignore_keys_for_eval,
-            metrics=metrics,
-            state=state,
-            control=control
-        )
+        return super()._maybe_log_save_evaluate(tr_loss, model, trial, epoch, ignore_keys_for_eval)
 
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         """
