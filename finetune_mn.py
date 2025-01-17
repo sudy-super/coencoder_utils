@@ -354,31 +354,68 @@ class CustomTrainer(Trainer):
             
         return super()._maybe_log_save_evaluate(tr_loss, model, trial, epoch, ignore_keys_for_eval)
 
-    def compute_loss(self, model, inputs, return_outputs=False):
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         """
-        Override compute_loss to capture the context lengths during the forward pass,
-        regardless of return_outputs value
+        Override compute_loss to capture the context lengths while maintaining original functionality
         """
+        # Handle label smoothing
+        if (self.label_smoother is not None or self.compute_loss_func is not None) and "labels" in inputs:
+            labels = inputs.pop("labels")
+        else:
+            labels = None
+
+        # Handle loss kwargs
+        if self.model_accepts_loss_kwargs:
+            loss_kwargs = {}
+            if num_items_in_batch is not None:
+                loss_kwargs["num_items_in_batch"] = num_items_in_batch
+            inputs = {**inputs, **loss_kwargs}
+
+        # Forward pass
         outputs = model(**inputs)
-        loss = outputs.loss
-        
-        # Extract and log context lengths regardless of return_outputs
+
+        # Log context lengths
         context_input_ids = inputs.get('context_input_ids', None)
         if context_input_ids is not None and isinstance(context_input_ids, torch.Tensor):
-            # Original context length
             context_length = context_input_ids.size(1)
-            # Get compressed length from the output
             if hasattr(outputs, 'context_hidden_states') and outputs.context_hidden_states is not None:
                 compressed_length = outputs.context_hidden_states.size(1)
-                
-                # Store lengths for logging
                 self.step_context_lengths.append(context_length)
                 self.step_compressed_lengths.append(compressed_length)
-                
-                # print(f"Original context length: {context_length}")
-                # print(f"Compressed context length: {compressed_length}")
-                # print(f"Compression ratio: {compressed_length/context_length:.2f}")
-        
+                print(f"Original context length: {context_length}")
+                print(f"Compressed context length: {compressed_length}")
+                print(f"Compression ratio: {compressed_length/context_length:.2f}")
+
+        # Save past state if it exists
+        if self.args.past_index >= 0:
+            self._past = outputs[self.args.past_index]
+
+        # Compute loss
+        if labels is not None:
+            unwrapped_model = self.accelerator.unwrap_model(model)
+            if is_peft_model(unwrapped_model):
+                model_name = unwrapped_model.base_model.model._get_name()
+            else:
+                model_name = unwrapped_model._get_name()
+            
+            if self.compute_loss_func is not None:
+                loss = self.compute_loss_func(outputs, labels, num_items_in_batch=num_items_in_batch)
+            elif model_name in MODEL_FOR_CAUSAL_LM_MAPPING_NAMES.values():
+                loss = self.label_smoother(outputs, labels, shift_labels=True)
+            else:
+                loss = self.label_smoother(outputs, labels)
+        else:
+            if isinstance(outputs, dict) and "loss" not in outputs:
+                raise ValueError(
+                    "The model did not return a loss from the inputs, only the following keys: "
+                    f"{','.join(outputs.keys())}. For reference, the inputs it received are {','.join(inputs.keys())}."
+                )
+            loss = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
+
+        # Handle multi-device token averaging
+        if self.args.average_tokens_across_devices and self.model_accepts_loss_kwargs:
+            loss *= self.accelerator.num_processes
+
         return (loss, outputs) if return_outputs else loss
 
     def training_step(self, model, inputs, optimizer=None):
