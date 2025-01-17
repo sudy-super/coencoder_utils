@@ -69,6 +69,7 @@ tokenizer.context_tokenizer.pad_token = tokenizer.context_tokenizer.eos_token
 tokenizer.text_tokenizer.pad_token_id = tokenizer.text_tokenizer.eos_token_id
 tokenizer.context_tokenizer.pad_token_id = tokenizer.context_tokenizer.eos_token_id
 
+model.config.use_cache = False
 model.model_parallel = True
 model.gradient_checkpointing_enable()
 torch.autograd.set_detect_anomaly(True)
