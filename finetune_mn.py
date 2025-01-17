@@ -315,7 +315,7 @@ class CustomTrainer(Trainer):
         self.step_context_lengths = []
         self.step_compressed_lengths = []
         
-    def _maybe_log_save_evaluate(self, tr_loss, model, trial, epoch, ignore_keys_for_eval):
+    def _maybe_log_save_evaluate(self, tr_loss, model, trial, epoch, ignore_keys_for_eval, *args, **kwargs):
         """Log context length metrics to wandb before calling parent method"""
         if len(self.step_context_lengths) > 0 and len(self.step_compressed_lengths) > 0:
             # Calculate average lengths for this logging step
@@ -345,7 +345,7 @@ class CustomTrainer(Trainer):
             self.step_context_lengths = []
             self.step_compressed_lengths = []
             
-        return super()._maybe_log_save_evaluate(tr_loss, model, trial, epoch, ignore_keys_for_eval)
+        return super()._maybe_log_save_evaluate(tr_loss, model, trial, epoch, ignore_keys_for_eval, *args, **kwargs)
 
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         """
