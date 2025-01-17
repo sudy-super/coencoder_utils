@@ -405,7 +405,7 @@ class CcubedForConditionalGeneration(CcubedPreTrainedModel):
             config.text_config,
             attn_implementation="flash_attention_2" if is_flash_attn_2_available() else "eager"
         )
-        from cut_cross_entropy import cce_patch
+        from cut_cross_entropy.transformers import cce_patch
         self.language_model = cce_patch(self.language_model, impl="cce_exact", reduction="mean", use_kahan=True, gradient_accumulation_steps=4)
         self.language_model.gradient_checkpointing_enable()
 
