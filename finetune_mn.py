@@ -382,9 +382,9 @@ class CustomTrainer(Trainer):
                 compressed_length = outputs.context_hidden_states.size(1)
                 self.step_context_lengths.append(context_length)
                 self.step_compressed_lengths.append(compressed_length)
-                print(f"Original context length: {context_length}")
-                print(f"Compressed context length: {compressed_length}")
-                print(f"Compression ratio: {compressed_length/context_length:.2f}")
+                # print(f"Original context length: {context_length}")
+                # print(f"Compressed context length: {compressed_length}")
+                # print(f"Compression ratio: {compressed_length/context_length:.2f}")
 
         # Save past state if it exists
         if self.args.past_index >= 0:
