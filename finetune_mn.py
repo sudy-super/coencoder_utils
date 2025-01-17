@@ -312,29 +312,83 @@ for i in range(len(first_batch)):
 class CustomTrainer(Trainer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-    def training_step(self, model, inputs, optimizer=None):
-        try:
-            # 通常のトレーニングステップを実行
-            loss = super().training_step(model, inputs, optimizer)
+        self.step_context_lengths = []
+        self.step_compressed_lengths = []
         
-            input_ids = inputs.get('input_ids', None)
-            context_input_ids = inputs.get('context_input_ids', None)
-            if input_ids is not None:
-                if isinstance(input_ids, torch.Tensor):
-                    text_lengths = [input_ids.size(1)]
-                else:
-                    text_lengths = [len(ids) for ids in input_ids]
-                print(f"Text lengths: {text_lengths}")
-            if context_input_ids is not None:
-                if isinstance(context_input_ids, torch.Tensor):
-                    context_lengths = [context_input_ids.size(1)]
-                else:
-                    context_lengths = [len(ids) for ids in context_input_ids]
-                print(f"Context lengths: {context_lengths}")
-            else:
-                print("Error occurred during training but could not retrieve input_ids or context_input_ids")
+    def _maybe_log_save_evaluate(self, tr_loss, model, trial, epoch, ignore_keys_for_eval):
+        """Log context length metrics to wandb before calling parent method"""
+        if len(self.step_context_lengths) > 0 and len(self.step_compressed_lengths) > 0:
+            # Calculate average lengths for this logging step
+            avg_context_length = sum(self.step_context_lengths) / len(self.step_context_lengths)
+            avg_compressed_length = sum(self.step_compressed_lengths) / len(self.step_compressed_lengths)
             
+            # Create length distribution data
+            length_pairs = list(zip(self.step_context_lengths, self.step_compressed_lengths))
+            compression_ratios = [comp/orig if orig > 0 else 0 for orig, comp in length_pairs]
+            
+            # Log metrics
+            metrics = {
+                "context_length/average": avg_context_length,
+                "context_length/compressed_average": avg_compressed_length,
+                "context_length/compression_ratio": sum(compression_ratios) / len(compression_ratios),
+                "context_length/max_original": max(self.step_context_lengths),
+                "context_length/max_compressed": max(self.step_compressed_lengths),
+                "context_length/min_original": min(self.step_context_lengths),
+                "context_length/min_compressed": min(self.step_compressed_lengths),
+            }
+            
+            # Create histogram data for wandb
+            if wandb.run is not None:
+                wandb.log(metrics)
+                
+                # Log histograms
+                wandb.log({
+                    "context_length/original_dist": wandb.Histogram(self.step_context_lengths),
+                    "context_length/compressed_dist": wandb.Histogram(self.step_compressed_lengths),
+                    "context_length/compression_ratio_dist": wandb.Histogram(compression_ratios)
+                })
+            
+            # Reset accumulated lengths
+            self.step_context_lengths = []
+            self.step_compressed_lengths = []
+            
+        return super()._maybe_log_save_evaluate(tr_loss, model, trial, epoch, ignore_keys_for_eval)
+
+    def compute_loss(self, model, inputs, return_outputs=False):
+        """
+        Override compute_loss to capture the context lengths during the forward pass,
+        regardless of return_outputs value
+        """
+        outputs = model(**inputs)
+        loss = outputs.loss
+        
+        # Extract and log context lengths regardless of return_outputs
+        context_input_ids = inputs.get('context_input_ids', None)
+        if context_input_ids is not None and isinstance(context_input_ids, torch.Tensor):
+            # Original context length
+            context_length = context_input_ids.size(1)
+            # Get compressed length from the output
+            if hasattr(outputs, 'context_hidden_states') and outputs.context_hidden_states is not None:
+                compressed_length = outputs.context_hidden_states.size(1)
+                
+                # Store lengths for logging
+                self.step_context_lengths.append(context_length)
+                self.step_compressed_lengths.append(compressed_length)
+                
+                # print(f"Original context length: {context_length}")
+                # print(f"Compressed context length: {compressed_length}")
+                # print(f"Compression ratio: {compressed_length/context_length:.2f}")
+        
+        return (loss, outputs) if return_outputs else loss
+
+    def training_step(self, model, inputs, optimizer=None):
+        """
+        Perform a training step, with added error handling and logging
+        """
+        try:
+            loss = super().training_step(model, inputs, optimizer)
             return loss
+            
         except Exception as e:
             input_ids = inputs.get('input_ids', None)
             context_input_ids = inputs.get('context_input_ids', None)
@@ -352,8 +406,6 @@ class CustomTrainer(Trainer):
                 print(f"Error occurred during training on batch with context lengths: {context_lengths}")
             else:
                 print("Error occurred during training but could not retrieve input_ids or context_input_ids")
-            # エラーが発生した場合、データの長さを出力    
-            # 例外を再度発生させる
             raise e
 
 
