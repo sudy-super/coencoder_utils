@@ -574,7 +574,7 @@ class CcubedForConditionalGeneration(CcubedPreTrainedModel):
         position_ids: Optional[torch.LongTensor] = None,
         past_key_values: Optional[List[torch.FloatTensor]] = None,
         labels: Optional[torch.LongTensor] = None,
-        use_cache: Optional[bool] = False,
+        use_cache: Optional[bool] = None,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
@@ -692,6 +692,7 @@ class CcubedForConditionalGeneration(CcubedPreTrainedModel):
         )
 
         logits = outputs[0]
+        print("Logits shape:", logits.shape)
 
         loss = None
         if labels is not None:
