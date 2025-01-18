@@ -102,6 +102,7 @@ if phase == 1:
 
     train_data_phase1 = train_data_phase1.shuffle(seed=42)
     val_data_phase1 = val_data_phase1.shuffle(seed=42)
+    val_data_phase1 = val_data_phase1.select(range(len(val_data_phase1) // 2))
 
     # データセットの件数をカウントして表示
     print(f"Number of train samples (phase1): {len(train_data_phase1)}")
@@ -448,7 +449,7 @@ args = TrainingArguments(
     num_train_epochs=1,
     per_device_train_batch_size=1,
     per_device_eval_batch_size=1,
-    gradient_accumulation_steps=4 if phase==2 else 4, # Phase1: 2, Phase2: 1
+    gradient_accumulation_steps=16 if phase==2 else 16, # Phase1: 2, Phase2: 1
     learning_rate=2e-5 if phase==2 else 1e-3, # Phase1: 1e-3, Phase2: 2e-5
     # label_smoothing_factor=0.1 if phase==2 else 0.0,
     adam_beta2=0.95,
@@ -462,7 +463,7 @@ args = TrainingArguments(
     logging_strategy="steps",
     eval_strategy="steps",
     save_strategy="steps",
-    eval_steps=50, # Phase1: 73, Phase2: 73
+    eval_steps=100, # Phase1: 73, Phase2: 73
     save_steps=2000, # Phase1: 949, Phase2: 2506
     output_dir="output",
     report_to="wandb",
