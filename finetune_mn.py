@@ -501,3 +501,6 @@ for name, param in model.connector.named_parameters():
 
 # 学習済みモデルの保存
 model.save_pretrained("c3_output_model", safe_serialization=True)
+
+import time
+time.sleep(10)
