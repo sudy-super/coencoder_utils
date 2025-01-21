@@ -255,12 +255,6 @@ for i in range(len(first_batch)):
     print(f"Text tokens count: {text_tokens_count}")
 """
 
-import torch
-import wandb
-from transformers import Trainer
-from transformers.trainer_utils import MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
-from peft.utils import is_peft_model
-
 class CustomTrainer(Trainer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
