@@ -373,8 +373,11 @@ class CustomTrainer(Trainer):
             inputs = {**inputs, **loss_kwargs}
 
         # Forward pass
-        print(inputs["input_ids"].shape)
-        print(inputs["context_input_ids"].shape)
+        print(f"input_ids shape: {inputs["input_ids"].shape}")
+        try:
+            print(f"context_input_ids shape: {inputs["context_input_ids"].shape}")
+        except KeyError:
+            print("context_input_ids shape: N/A")
         outputs = model(**inputs)
 
         # Log context lengths if context_input_ids exist
