@@ -373,9 +373,11 @@ class CustomTrainer(Trainer):
             inputs = {**inputs, **loss_kwargs}
 
         # Forward pass
-        print(f"input_ids shape: {inputs["input_ids"].shape}")
+        i_s = inputs["input_ids"].shape
+        print(f"input_ids shape: {i_s}")
         try:
-            print(f"context_input_ids shape: {inputs["context_input_ids"].shape}")
+            c_s = inputs["context_input_ids"].shape
+            print(f"context_input_ids shape: {c_s}")
         except KeyError:
             print("context_input_ids shape: N/A")
         outputs = model(**inputs)
