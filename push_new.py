@@ -39,7 +39,7 @@ tokenizer.save_pretrained(model_dir)
 
 # Hugging Face Hubにログイン
 api = HfApi()
-token="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"
+token=HfFolder.get_token()
 
 if token is None:
     from huggingface_hub import notebook_login
