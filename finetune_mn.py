@@ -108,7 +108,7 @@ if phase == 1:
     print(f"Number of train samples (phase1): {len(train_data_phase1)}")
     print(f"Number of validation samples (phase1): {len(val_data_phase1)}")
 elif phase == 2:
-    dataset = load_dataset("sudy-super/c_cubed_finetune_tokenized")
+    dataset = load_dataset("sudy-super/c_cubed_finetune_tokenized_4096")
 
     # データセットの取得
     train_data_phase2 = dataset["train"]
@@ -453,7 +453,7 @@ args = TrainingArguments(
     learning_rate=2e-5 if phase==2 else 1e-3, # Phase1: 1e-3, Phase2: 2e-5
     # label_smoothing_factor=0.1 if phase==2 else 0.0,
     adam_beta2=0.95,
-    adam_epsilon=1e-15,
+    adam_epsilon=1e-8,
     weight_decay=0.1,
     lr_scheduler_type="cosine",
     warmup_ratio=0.03,
