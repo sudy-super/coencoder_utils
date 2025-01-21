@@ -125,193 +125,6 @@ elif phase == 2:
 
 class DataCollatorAssistantWithContext:
     """
-    1) context_input_ids, context_attention_mask を含む入力をパディング・整形し、
-       コンテキストがすべて pad のときはそれを削除、部分的に pad のときは attention_mask を 0 に。
-    2) メインテキスト (input_ids, attention_mask) もパディングし、labels もパディング。
-    3) 「<|im_start|>assistant ~ <|im_end|>」以外のトークンを labels = -100 に置き換える。
-    """
-
-    def __init__(self, tokenizer):
-        """
-        tokenizer には以下のような想定:
-            tokenizer.context_tokenizer
-            tokenizer.text_tokenizer
-            または context / text 共通で tokenizer を流用するなら
-            tokenizer.pad(...) で分けて使ってもOK。
-
-        ここでは例として tokenizer.context_tokenizer, tokenizer.text_tokenizer を使う想定。
-        """
-        self.tokenizer = tokenizer
-
-        # 以下は「アシスタント部分のみを学習対象とする」ための特殊トークン設定
-        self.start_token_id = tokenizer.text_tokenizer.convert_tokens_to_ids("<|im_start|>")
-        self.end_token_id   = tokenizer.text_tokenizer.convert_tokens_to_ids("<|im_end|>")
-
-        # "assistant" のトークン ID (必要に応じて変更)
-        self.assistant_token_id = 77091
-
-        # 改行のトークンID (必要に応じて変更)
-        self.newline_token_id = 198
-
-    def __call__(self, features):
-        """
-        features は下記形式のリストを想定:
-        [
-            {
-                "context_input_ids": [...],
-                "context_attention_mask": [...],  # 無い場合もあるので .get() などで扱う
-                "input_ids": [...],
-                "attention_mask": [...],
-            },
-            ...
-        ]
-        """
-
-        # --------
-        # 1) コンテキスト部分のパディングと削除判定
-        # --------
-        # context_input_ids, attention_mask が与えられていない場合も考慮
-        context_features = []
-        for f in features:
-            if "context_input_ids" in f:
-                context_features.append({
-                    'input_ids': f["context_input_ids"],
-                    'attention_mask': f.get("context_attention_mask", [1]*len(f["context_input_ids"]))
-                })
-            else:
-                # コンテキストが無い場合は空配列（または適当に処理）を入れておく
-                context_features.append({
-                    'input_ids': [],
-                    'attention_mask': []
-                })
-
-        # パディング (context用)
-        context_batch = self.tokenizer.context_tokenizer.pad(
-            context_features,
-            padding=True,
-            return_tensors="pt"
-        )
-
-        pad_token_id = self.tokenizer.context_tokenizer.pad_token_id
-
-        # バッチ全体が pad かの判定
-        # [batch_size, seq_len] => 行方向に all pad => さらに全サンプル True => batch 全体 True
-        all_context_is_pad = (context_batch["input_ids"] == pad_token_id).all(dim=1).all()
-
-        # --------
-        # 2) テキスト部分のパディングと labels 作成 (まだ -100 処理はしない)
-        # --------
-        text_features = [{
-            'input_ids': f['input_ids'],
-            'attention_mask': f['attention_mask']
-        } for f in features]
-
-        text_batch = self.tokenizer.text_tokenizer.pad(
-            text_features,
-            padding=True,
-            return_tensors="pt"
-        )
-
-        # ラベルも同様にパディング (初期値は input_ids と同じ)
-        label_features = [{'input_ids': f['input_ids']} for f in features]
-        labels_batch = self.tokenizer.text_tokenizer.pad(
-            label_features,
-            padding=True,
-            return_tensors="pt"
-        )
-
-        # --------
-        # 3) コンテキスト削除 or attention_mask 調整
-        # --------
-        if all_context_is_pad:
-            # バッチ内のコンテキストがすべて pad トークンなら context を取り除く
-            batch = {
-                'input_ids': text_batch['input_ids'],
-                'attention_mask': text_batch['attention_mask'],
-                'labels': labels_batch['input_ids'],
-            }
-        else:
-            # バッチ内の一部が pad のサンプルだけ attention_mask = 0 に
-            is_all_padding_sample = (context_batch['input_ids'] == pad_token_id).all(dim=1)
-            context_batch['attention_mask'][is_all_padding_sample] = 0
-
-            batch = {
-                'context_input_ids': context_batch['input_ids'],
-                'context_attention_mask': context_batch['attention_mask'],
-                'input_ids': text_batch['input_ids'],
-                'attention_mask': text_batch['attention_mask'],
-                'labels': labels_batch['input_ids'],
-            }
-
-        # --------
-        # 4) 「<|im_start|>assistant ~ <|im_end|>」以外を -100 に置き換える
-        #    （メインテキスト側: batch["labels"] に対して実行）
-        # --------
-        # labels は [batch_size, seq_len] でパディング後のトークン ID が入っている
-        # 上で作った labels_batch['input_ids'] を batch["labels"] として登録済み
-        labels = batch["labels"]
-        input_ids = batch["input_ids"]  # テキスト用 input_ids
-
-        batch_size = labels.size(0)
-        seq_len = labels.size(1)
-
-        for idx in range(batch_size):
-            token_ids = input_ids[idx]
-            in_assistant = False
-
-            i = 0
-            while i < seq_len:
-                tid = token_ids[i]
-
-                # <|im_start|> に遭遇し、その次が assistant トークンなら開始
-                if tid == self.start_token_id:
-                    if (i + 1 < seq_len) and (token_ids[i+1] == self.assistant_token_id):
-                        in_assistant = True
-                        # <|im_start|>, assistant は学習対象外
-                        labels[idx, i]   = -100
-                        labels[idx, i+1] = -100
-
-                        # もし直後の改行も無視するなら
-                        if (i + 2 < seq_len) and (token_ids[i+2] == self.newline_token_id):
-                            labels[idx, i+2] = -100
-                        i += 2  # 2トークン分飛ばす
-                        continue
-                    else:
-                        # assistant トークンでなければ学習対象外
-                        labels[idx, i] = -100
-                        in_assistant = False
-
-                elif tid == self.end_token_id:
-                    # アシスタント区間終了
-                    in_assistant = False
-                    # 終了トークン自体も学習対象外
-                    # labels[idx, i] = -100
-                    # 終了トークンは学習対象に
-
-                else:
-                    # アシスタント区間外は学習対象外に
-                    if not in_assistant:
-                        labels[idx, i] = -100
-
-                i += 1
-
-        batch["labels"] = labels
-
-        return batch
-
-
-"""
-# 最初のバッチのトークン数を出力
-first_batch = train_data[:1]
-for i in range(len(first_batch)):
-    context_tokens_count = len(first_batch['context_input_ids'][i])
-    text_tokens_count = len(first_batch['input_ids'][i])
-    print(f"Context tokens count: {context_tokens_count}")
-    print(f"Text tokens count: {text_tokens_count}")
-"""
-
-class DataCollatorAssistantWithContext:
-    """
     1) 全サンプルで必ず `context_input_ids`, `context_attention_mask` を持つようにする
        （無いサンプルには空リストをセット）
     2) コンテキスト・メインテキストをパディング
@@ -324,8 +137,8 @@ class DataCollatorAssistantWithContext:
         # 特殊トークン
         self.start_token_id = tokenizer.text_tokenizer.convert_tokens_to_ids("<|im_start|>")
         self.end_token_id   = tokenizer.text_tokenizer.convert_tokens_to_ids("<|im_end|>")
-        self.assistant_token_id = tokenizer.text_tokenizer.convert_tokens_to_ids("assistant")
-        self.newline_token_id = tokenizer.text_tokenizer.eos_token_id  # 必要に応じて改行IDを設定
+        self.assistant_token_id = 77091
+        self.newline_token_id = 198
 
     def __call__(self, features):
         # --------
@@ -430,6 +243,163 @@ class DataCollatorAssistantWithContext:
 
         batch["labels"] = labels
         return batch
+
+
+"""
+# 最初のバッチのトークン数を出力
+first_batch = train_data[:1]
+for i in range(len(first_batch)):
+    context_tokens_count = len(first_batch['context_input_ids'][i])
+    text_tokens_count = len(first_batch['input_ids'][i])
+    print(f"Context tokens count: {context_tokens_count}")
+    print(f"Text tokens count: {text_tokens_count}")
+"""
+
+class CustomTrainer(Trainer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.step_context_lengths = []
+        self.step_compressed_lengths = []
+        
+    def _maybe_log_save_evaluate(self, tr_loss, model, trial, epoch, ignore_keys_for_eval, *args, **kwargs):
+        """
+        Log context length metrics to wandb before calling parent method.
+        Only logs if we have any stored context/compressed lengths.
+        """
+        if len(self.step_context_lengths) > 0 and len(self.step_compressed_lengths) > 0:
+            # Calculate average lengths for this logging step
+            avg_context_length = sum(self.step_context_lengths) / len(self.step_context_lengths)
+            avg_compressed_length = sum(self.step_compressed_lengths) / len(self.step_compressed_lengths)
+            
+            # Create length distribution data
+            length_pairs = list(zip(self.step_context_lengths, self.step_compressed_lengths))
+            compression_ratios = [
+                comp / orig if orig > 0 else 0
+                for orig, comp in length_pairs
+            ]
+            
+            # Log metrics directly to wandb
+            if self.args.report_to == ["wandb"] and wandb.run is not None:
+                wandb.log({
+                    "context_length/average": avg_context_length,
+                    "context_length/compressed_average": avg_compressed_length,
+                    "context_length/compression_ratio": sum(compression_ratios) / len(compression_ratios),
+                    "context_length/max_original": max(self.step_context_lengths),
+                    "context_length/max_compressed": max(self.step_compressed_lengths),
+                    "context_length/min_original": min(self.step_context_lengths),
+                    "context_length/min_compressed": min(self.step_compressed_lengths),
+                    "context_length/original_dist": wandb.Histogram(self.step_context_lengths),
+                    "context_length/compressed_dist": wandb.Histogram(self.step_compressed_lengths),
+                    "context_length/compression_ratio_dist": wandb.Histogram(compression_ratios)
+                })
+            
+            # Reset accumulated lengths
+            self.step_context_lengths = []
+            self.step_compressed_lengths = []
+            
+        return super()._maybe_log_save_evaluate(tr_loss, model, trial, epoch, ignore_keys_for_eval, *args, **kwargs)
+
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
+        """
+        Override compute_loss to capture the context lengths while maintaining original functionality.
+        If `context_input_ids` is not present, simply skip that logging.
+        """
+        # Handle label smoothing
+        if (self.label_smoother is not None or self.compute_loss_func is not None) and "labels" in inputs:
+            labels = inputs.pop("labels")
+        else:
+            labels = None
+
+        # Handle loss kwargs
+        if self.model_accepts_loss_kwargs:
+            loss_kwargs = {}
+            if num_items_in_batch is not None:
+                loss_kwargs["num_items_in_batch"] = num_items_in_batch
+            inputs = {**inputs, **loss_kwargs}
+
+        # Forward pass
+        i_s = inputs["input_ids"].shape
+        print(f"input_ids shape: {i_s}")
+        try:
+            c_s = inputs["context_input_ids"].shape
+            print(f"context_input_ids shape: {c_s}")
+        except KeyError:
+            print("context_input_ids shape: N/A")
+        outputs = model(**inputs)
+
+        # Log context lengths if context_input_ids exist
+        context_input_ids = inputs.get('context_input_ids', None)
+        if context_input_ids is not None and isinstance(context_input_ids, torch.Tensor):
+            context_length = context_input_ids.size(1)
+            # Check if model outputs compressed context_hidden_states
+            if hasattr(outputs, 'context_hidden_states') and outputs.context_hidden_states is not None:
+                compressed_length = outputs.context_hidden_states.size(1)
+                self.step_context_lengths.append(context_length)
+                self.step_compressed_lengths.append(compressed_length)
+
+        # Save past state if it exists
+        if self.args.past_index >= 0:
+            self._past = outputs[self.args.past_index]
+
+        # Compute loss
+        if labels is not None:
+            unwrapped_model = self.accelerator.unwrap_model(model)
+            if is_peft_model(unwrapped_model):
+                model_name = unwrapped_model.base_model.model._get_name()
+            else:
+                model_name = unwrapped_model._get_name()
+            
+            if self.compute_loss_func is not None:
+                loss = self.compute_loss_func(outputs, labels, num_items_in_batch=num_items_in_batch)
+            elif model_name in MODEL_FOR_CAUSAL_LM_MAPPING_NAMES.values():
+                loss = self.label_smoother(outputs, labels, shift_labels=True)
+            else:
+                loss = self.label_smoother(outputs, labels)
+        else:
+            if isinstance(outputs, dict) and "loss" not in outputs:
+                raise ValueError(
+                    "The model did not return a loss from the inputs, only the following keys: "
+                    f"{','.join(outputs.keys())}. For reference, the inputs it received are {','.join(inputs.keys())}."
+                )
+            loss = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
+
+        # Handle multi-device token averaging
+        if self.args.average_tokens_across_devices and self.model_accepts_loss_kwargs:
+            loss *= self.accelerator.num_processes
+
+        return (loss, outputs) if return_outputs else loss
+
+    def training_step(self, model, inputs, optimizer=None):
+        """
+        Perform a training step, with added error handling and logging.
+        """
+        try:
+            loss = super().training_step(model, inputs, optimizer)
+            return loss
+            
+        except Exception as e:
+            input_ids = inputs.get('input_ids', None)
+            context_input_ids = inputs.get('context_input_ids', None)
+
+            # Log info about input_ids (if present)
+            if input_ids is not None:
+                if isinstance(input_ids, torch.Tensor):
+                    text_lengths = [input_ids.size(1)]
+                else:
+                    text_lengths = [len(ids) for ids in input_ids]
+                print(f"Error occurred during training on batch with text lengths: {text_lengths}")
+
+            # Log info about context_input_ids (if present)
+            if context_input_ids is not None:
+                if isinstance(context_input_ids, torch.Tensor):
+                    context_lengths = [context_input_ids.size(1)]
+                else:
+                    context_lengths = [len(ids) for ids in context_input_ids]
+                print(f"Error occurred during training on batch with context lengths: {context_lengths}")
+            else:
+                print("Error occurred during training; no context_input_ids found in inputs.")
+
+            raise e
 
 
 # Hugging Faceの進捗バーを強制的に有効化
