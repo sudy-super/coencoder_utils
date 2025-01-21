@@ -108,7 +108,7 @@ if phase == 1:
     print(f"Number of train samples (phase1): {len(train_data_phase1)}")
     print(f"Number of validation samples (phase1): {len(val_data_phase1)}")
 elif phase == 2:
-    dataset = load_dataset("sudy-super/c_cubed_finetune_tokenized_4096")
+    dataset = load_dataset("sudy-super/c_cubed_finetune_tokenized")
 
     # データセットの取得
     train_data_phase2 = dataset["train"]
@@ -148,7 +148,13 @@ class DataCollatorAssistantWithContext:
             if "context_input_ids" not in f:
                 f["context_input_ids"] = []
             if "context_attention_mask" not in f:
-                f["context_attention_mask"] = [1] * len(f["context_input_ids"])
+                context_ids = f["context_input_ids"]
+                pad_id = self.tokenizer.context_tokenizer.pad_token_id 
+                f["context_attention_mask"] = [
+                    0 if tok_id == pad_id else 1
+                    for tok_id in context_ids
+                ]
+            #     f["context_attention_mask"] = [1] * len(f["context_input_ids"])
 
         # --------
         # 1) コンテキスト部分をパディング (常に残す)
@@ -417,8 +423,8 @@ logging.enable_progress_bar()
 # トレーニング引数の設定
 args = TrainingArguments(
     num_train_epochs=1,
-    per_device_train_batch_size=2 if phase==2 else 1, # Phase1: 2, Phase2: 1
-    per_device_eval_batch_size=2 if phase==2 else 1, # Phase1: 2, Phase2: 1
+    per_device_train_batch_size=1,
+    per_device_eval_batch_size=1,
     gradient_accumulation_steps=4 if phase==2 else 8, # Phase1: 2, Phase2: 1
     learning_rate=2e-5 if phase==2 else 1e-3, # Phase1: 1e-3, Phase2: 2e-5
     # label_smoothing_factor=0.1 if phase==2 else 0.0,
