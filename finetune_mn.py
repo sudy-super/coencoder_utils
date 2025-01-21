@@ -255,12 +255,19 @@ for i in range(len(first_batch)):
     print(f"Text tokens count: {text_tokens_count}")
 """
 
+import torch
+import wandb
+from transformers import Trainer
+from transformers.trainer_utils import MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
+from peft.utils import is_peft_model
+
 class CustomTrainer(Trainer):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, pad_token_id=0, **kwargs):
         super().__init__(*args, **kwargs)
         self.step_context_lengths = []
         self.step_compressed_lengths = []
-        
+        self.pad_token_id = pad_token_id  # ここでpad_token_idを保持
+
     def _maybe_log_save_evaluate(self, tr_loss, model, trial, epoch, ignore_keys_for_eval, *args, **kwargs):
         """
         Log context length metrics to wandb before calling parent method.
@@ -327,15 +334,20 @@ class CustomTrainer(Trainer):
             print("context_input_ids shape: N/A")
         outputs = model(**inputs)
 
-        # Log context lengths if context_input_ids exist
+        # Log context lengths if context_input_ids exist and are not all pads
         context_input_ids = inputs.get('context_input_ids', None)
         if context_input_ids is not None and isinstance(context_input_ids, torch.Tensor):
-            context_length = context_input_ids.size(1)
-            # Check if model outputs compressed context_hidden_states
-            if hasattr(outputs, 'context_hidden_states') and outputs.context_hidden_states is not None:
-                compressed_length = outputs.context_hidden_states.size(1)
-                self.step_context_lengths.append(context_length)
-                self.step_compressed_lengths.append(compressed_length)
+            # ここで「すべてpadトークンのみかどうか」をチェック
+            # self.pad_token_id は __init__ で設定済み
+            if not torch.all(context_input_ids.eq(self.pad_token_id)):
+                # 全部がpadトークンではなかった場合のみログ用リストを更新
+                context_length = context_input_ids.size(1)
+                
+                # Check if model outputs compressed context_hidden_states
+                if hasattr(outputs, 'context_hidden_states') and outputs.context_hidden_states is not None:
+                    compressed_length = outputs.context_hidden_states.size(1)
+                    self.step_context_lengths.append(context_length)
+                    self.step_compressed_lengths.append(compressed_length)
 
         # Save past state if it exists
         if self.args.past_index >= 0:
