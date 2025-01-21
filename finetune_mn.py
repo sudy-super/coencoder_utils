@@ -108,7 +108,7 @@ if phase == 1:
     print(f"Number of train samples (phase1): {len(train_data_phase1)}")
     print(f"Number of validation samples (phase1): {len(val_data_phase1)}")
 elif phase == 2:
-    dataset = load_dataset("sudy-super/c_cubed_finetune_tokenized")
+    dataset = load_dataset("sudy-super/c_cubed_finetune_tokenized_ctx_only")
 
     # データセットの取得
     train_data_phase2 = dataset["train"]
