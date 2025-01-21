@@ -10,9 +10,9 @@ CcubedConfig.register_for_auto_class("AutoConfig")
 CcubedForConditionalGeneration.register_for_auto_class("AutoModelForCausalLM")
 CcubedDualTokenizer.register_for_auto_class("AutoTokenizer")
 
-tokenizer = CcubedDualTokenizer.from_pretrained("./co_model", trust_remote_code=True)
+tokenizer = CcubedDualTokenizer.from_pretrained("./tokenizer_production", trust_remote_code=True)
 
-model = CcubedForConditionalGeneration.from_pretrained("./co_output_model", torch_dtype=torch.bfloat16, trust_remote_code=True)
+model = CcubedForConditionalGeneration.from_pretrained("./output/checkpoint-1209-consolidated", torch_dtype=torch.bfloat16, trust_remote_code=True)
 
 """
 # カスタムトークナイザを作成
@@ -23,7 +23,7 @@ tokenizer = CcubedDualTokenizer(
 """
 
 # 2. モデルとトークナイザを保存
-model_dir = "coencoder_test2_phase1_2"
+model_dir = "c_cubed_phase1"
 os.makedirs(model_dir, exist_ok=True)
 
 # モデルを保存
