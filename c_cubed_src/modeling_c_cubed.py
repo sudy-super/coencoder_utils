@@ -270,7 +270,6 @@ class CcubedDynamicWeightedAvgPool1d(nn.Module):
 
         for batch_idx in range(batch_size):
             output_size = dynamic_output_sizes[batch_idx].item()
-            print(output_size)
             item_input = hidden_states[batch_idx]  # Shape: (seq_len, hidden_size)
             item_weights = attention_weights[batch_idx]  # Shape: (seq_len)
    

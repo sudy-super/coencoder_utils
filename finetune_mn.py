@@ -310,6 +310,12 @@ for i in range(len(first_batch)):
     print(f"Text tokens count: {text_tokens_count}")
 """
 
+import torch
+import wandb
+from transformers import Trainer
+from transformers.trainer_utils import MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
+from peft.utils import is_peft_model
+
 class CustomTrainer(Trainer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -317,7 +323,10 @@ class CustomTrainer(Trainer):
         self.step_compressed_lengths = []
         
     def _maybe_log_save_evaluate(self, tr_loss, model, trial, epoch, ignore_keys_for_eval, *args, **kwargs):
-        """Log context length metrics to wandb before calling parent method"""
+        """
+        Log context length metrics to wandb before calling parent method.
+        Only logs if we have any stored context/compressed lengths.
+        """
         if len(self.step_context_lengths) > 0 and len(self.step_compressed_lengths) > 0:
             # Calculate average lengths for this logging step
             avg_context_length = sum(self.step_context_lengths) / len(self.step_context_lengths)
@@ -325,7 +334,10 @@ class CustomTrainer(Trainer):
             
             # Create length distribution data
             length_pairs = list(zip(self.step_context_lengths, self.step_compressed_lengths))
-            compression_ratios = [comp/orig if orig > 0 else 0 for orig, comp in length_pairs]
+            compression_ratios = [
+                comp / orig if orig > 0 else 0
+                for orig, comp in length_pairs
+            ]
             
             # Log metrics directly to wandb
             if self.args.report_to == ["wandb"] and wandb.run is not None:
@@ -350,7 +362,8 @@ class CustomTrainer(Trainer):
 
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         """
-        Override compute_loss to capture the context lengths while maintaining original functionality
+        Override compute_loss to capture the context lengths while maintaining original functionality.
+        If `context_input_ids` is not present, simply skip that logging.
         """
         # Handle label smoothing
         if (self.label_smoother is not None or self.compute_loss_func is not None) and "labels" in inputs:
@@ -368,17 +381,15 @@ class CustomTrainer(Trainer):
         # Forward pass
         outputs = model(**inputs)
 
-        # Log context lengths
+        # Log context lengths if context_input_ids exist
         context_input_ids = inputs.get('context_input_ids', None)
         if context_input_ids is not None and isinstance(context_input_ids, torch.Tensor):
             context_length = context_input_ids.size(1)
+            # Check if model outputs compressed context_hidden_states
             if hasattr(outputs, 'context_hidden_states') and outputs.context_hidden_states is not None:
                 compressed_length = outputs.context_hidden_states.size(1)
                 self.step_context_lengths.append(context_length)
                 self.step_compressed_lengths.append(compressed_length)
-                # print(f"Original context length: {context_length}")
-                # print(f"Compressed context length: {compressed_length}")
-                # print(f"Compression ratio: {compressed_length/context_length:.2f}")
 
         # Save past state if it exists
         if self.args.past_index >= 0:
@@ -414,7 +425,7 @@ class CustomTrainer(Trainer):
 
     def training_step(self, model, inputs, optimizer=None):
         """
-        Perform a training step, with added error handling and logging
+        Perform a training step, with added error handling and logging.
         """
         try:
             loss = super().training_step(model, inputs, optimizer)
@@ -423,12 +434,16 @@ class CustomTrainer(Trainer):
         except Exception as e:
             input_ids = inputs.get('input_ids', None)
             context_input_ids = inputs.get('context_input_ids', None)
+
+            # Log info about input_ids (if present)
             if input_ids is not None:
                 if isinstance(input_ids, torch.Tensor):
                     text_lengths = [input_ids.size(1)]
                 else:
                     text_lengths = [len(ids) for ids in input_ids]
                 print(f"Error occurred during training on batch with text lengths: {text_lengths}")
+
+            # Log info about context_input_ids (if present)
             if context_input_ids is not None:
                 if isinstance(context_input_ids, torch.Tensor):
                     context_lengths = [context_input_ids.size(1)]
@@ -436,7 +451,8 @@ class CustomTrainer(Trainer):
                     context_lengths = [len(ids) for ids in context_input_ids]
                 print(f"Error occurred during training on batch with context lengths: {context_lengths}")
             else:
-                print("Error occurred during training but could not retrieve input_ids or context_input_ids")
+                print("Error occurred during training; no context_input_ids found in inputs.")
+
             raise e
 
 
