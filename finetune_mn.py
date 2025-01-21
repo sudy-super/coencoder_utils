@@ -262,11 +262,11 @@ from transformers.trainer_utils import MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
 from peft.utils import is_peft_model
 
 class CustomTrainer(Trainer):
-    def __init__(self, *args, pad_token_id=0, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.step_context_lengths = []
         self.step_compressed_lengths = []
-        self.pad_token_id = pad_token_id  # ここでpad_token_idを保持
+        self.pad_token_id = tokenizer.context_tokenizer.pad_token_id
 
     def _maybe_log_save_evaluate(self, tr_loss, model, trial, epoch, ignore_keys_for_eval, *args, **kwargs):
         """
@@ -325,6 +325,7 @@ class CustomTrainer(Trainer):
             inputs = {**inputs, **loss_kwargs}
 
         # Forward pass
+        """
         i_s = inputs["input_ids"].shape
         print(f"input_ids shape: {i_s}")
         try:
@@ -332,6 +333,7 @@ class CustomTrainer(Trainer):
             print(f"context_input_ids shape: {c_s}")
         except KeyError:
             print("context_input_ids shape: N/A")
+        """
         outputs = model(**inputs)
 
         # Log context lengths if context_input_ids exist and are not all pads
