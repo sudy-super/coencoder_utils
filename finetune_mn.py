@@ -426,7 +426,7 @@ args = TrainingArguments(
     per_device_train_batch_size=1,
     per_device_eval_batch_size=1,
     gradient_accumulation_steps=4 if phase==2 else 8, # Phase1: 2, Phase2: 1
-    learning_rate=1e-5 if phase==2 else 1e-3, # Phase1: 1e-3, Phase2: 2e-5
+    learning_rate=7e-6 if phase==2 else 1e-3, # Phase1: 1e-3, Phase2: 2e-5
     # label_smoothing_factor=0.1 if phase==2 else 0.0,
     adam_beta2=0.95,
     adam_epsilon=1e-8,
