@@ -1,5 +1,5 @@
 import os
-from huggingface_hub import HfApi, HfFolder, RepositoryExistsError
+from huggingface_hub import HfApi, HfFolder
 
 def upload_folder_to_huggingface(model_id, folder_path, token=None, private=False):
     """
@@ -22,7 +22,7 @@ def upload_folder_to_huggingface(model_id, folder_path, token=None, private=Fals
     try:
         repo_info = api.repo_info(repo_id=model_id, token=token)
         print(f"リポジトリ '{model_id}' は既に存在します。")
-    except RepositoryExistsError:
+    except:
         print(f"リポジトリ '{model_id}' は既に存在します。")
     except Exception as e:
         if "404" in str(e):
