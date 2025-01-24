@@ -1,5 +1,5 @@
 import os
-from huggingface_hub import HfApi, HfFolder
+from huggingface_hub import HfApi, HfFolder, RepositoryNotFoundError
 
 def upload_folder_to_huggingface(model_id, folder_path, token=None, private=False):
     """
@@ -22,18 +22,17 @@ def upload_folder_to_huggingface(model_id, folder_path, token=None, private=Fals
     try:
         repo_info = api.repo_info(repo_id=model_id, token=token)
         print(f"リポジトリ '{model_id}' は既に存在します。")
+    except RepositoryNotFoundError:
+        print(f"リポジトリ '{model_id}' が存在しないため、新規作成します。")
+        api.create_repo(
+            repo_id=model_id,
+            token=token,
+            private=private,
+            repo_type="model",
+            exist_ok=True  # 既に存在する場合はエラーを出さない
+        )
     except Exception as e:
-        if "404" in str(e):
-            print(f"リポジトリ '{model_id}' が存在しないため、新規作成します。")
-            api.create_repo(
-                name=model_id.split('/')[-1],
-                token=token,
-                private=private,
-                repo_type="model",
-                exist_ok=True  # 既に存在する場合はエラーを出さない
-            )
-        else:
-            raise e
+        raise e
 
     # フォルダ内の全ファイルを再帰的に取得
     for root, dirs, files in os.walk(folder_path):
