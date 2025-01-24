@@ -13,6 +13,9 @@ CcubedDualTokenizer.register_for_auto_class("AutoTokenizer")
 tokenizer = CcubedDualTokenizer.from_pretrained("./tokenizer_production", trust_remote_code=True)
 
 model = CcubedForConditionalGeneration.from_pretrained("./output/checkpoint-1209-consolidated", torch_dtype=torch.bfloat16, trust_remote_code=True)
+model.context_tower = model.context_tower.to(dtype=torch.bfloat16)
+model.connector = model.connector.to(dtype=torch.bfloat16)
+model.language_model = model.language_model.to(dtype=torch.bfloat16)
 
 """
 # カスタムトークナイザを作成
