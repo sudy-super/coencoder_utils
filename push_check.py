@@ -1,5 +1,6 @@
 import os
-from huggingface_hub import HfApi, HfFolder, RepositoryNotFoundError
+from huggingface_hub import HfApi, HfFolder
+import requests
 
 def upload_folder_to_huggingface(model_id, folder_path, token=None, private=False):
     """
@@ -22,19 +23,26 @@ def upload_folder_to_huggingface(model_id, folder_path, token=None, private=Fals
     try:
         repo_info = api.repo_info(repo_id=model_id, token=token)
         print(f"リポジトリ '{model_id}' は既に存在します。")
-    except RepositoryNotFoundError:
-        print(f"リポジトリ '{model_id}' が存在しないため、新規作成します。")
-        api.create_repo(
-            repo_id=model_id,
-            token=token,
-            private=private,
-            repo_type="model",
-            exist_ok=True  # 既に存在する場合はエラーを出さない
-        )
-    except Exception as e:
-        raise e
-
-    # フォルダ内の全ファイルを再帰的に取得
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            print(f"リポジトリ '{model_id}' が存在しないため、新規作成します。")
+            try:
+                api.create_repo(
+                    repo_id=model_id,
+                    token=token,
+                    private=private,
+                    repo_type="model",
+                    exist_ok=True  # 既に存在する場合はエラーを出さない
+                )
+                print(f"リポジトリ '{model_id}' を作成しました。")
+            except Exception as create_error:
+                print(f"リポジトリ '{model_id}' の作成中にエラーが発生しました: {create_error}")
+                raise create_error
+        else:
+            print(f"リポジトリ情報の取得中にエラーが発生しました: {e}")
+            raise e
+    
+    # フォルダ内の全ファイルを再帰的に取得してアップロード
     for root, dirs, files in os.walk(folder_path):
         for file in files:
             local_file_path = os.path.join(root, file)
@@ -50,6 +58,7 @@ def upload_folder_to_huggingface(model_id, folder_path, token=None, private=Fals
                     repo_type="model",
                     token=token
                 )
+                print(f"アップロード成功: {relative_path}")
             except Exception as upload_error:
                 print(f"ファイル '{relative_path}' のアップロード中にエラーが発生しました: {upload_error}")
 
