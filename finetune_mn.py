@@ -471,7 +471,7 @@ trainer = CustomTrainer(
 
 print("[INFO] Trainer initialized successfully.")
 # トレーニング開始
-trainer.train()
+trainer.train() # resume_from_checkpoint=True
 
 for name, param in model.connector.named_parameters():
     if param.requires_grad:
