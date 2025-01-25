@@ -23,6 +23,8 @@ from datetime import datetime
 
 # import torch.distributed as dist
 
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+
 phase = 2
 
 # DeepSpeedがtorch.distributedの初期化を行うため、その後でランクを取得します
