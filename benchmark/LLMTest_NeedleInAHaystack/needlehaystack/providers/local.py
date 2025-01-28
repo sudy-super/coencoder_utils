@@ -73,6 +73,11 @@ class Local(ModelProvider):
         generation_output = self.model.generate(
             input_ids,
             max_new_tokens=MAX_GEN_LENGTH,
+            temperature=0.7,
+            top_k=50,
+            top_p=0.95,
+            repetition_penalty=1.1,
+            eos_token_id=151645, # <|im_end|>
             use_cache=True,
             return_dict_in_generate=True)
 
