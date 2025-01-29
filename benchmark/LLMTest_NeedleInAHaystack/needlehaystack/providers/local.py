@@ -83,8 +83,10 @@ class Local(ModelProvider):
 
         if self.model_or_path == "sudy-super/C-cubed-8B-128k":
             generation_output = self.model.generate(
-                context_input_ids,
-                input_ids,
+                context_input_ids=context_input_ids,
+                context_attention_mask=None
+                input_ids=input_ids,
+                attention_mask=None,
                 max_new_tokens=MAX_GEN_LENGTH,
                 temperature=0.7,
                 top_k=50,
