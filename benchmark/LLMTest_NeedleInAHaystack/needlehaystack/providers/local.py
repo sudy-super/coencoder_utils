@@ -85,10 +85,9 @@ class Local(ModelProvider):
         if self.model_or_path == "sudy-super/C-cubed-8B-128k":
             generation_output = self.model.generate(
                 context_input_ids=context_input_ids,
-                context_attention_mask=None,
                 input_ids=input_ids,
-                attention_mask=None,
                 max_new_tokens=MAX_GEN_LENGTH,
+                do_sample=True,
                 temperature=0.7,
                 top_k=50,
                 top_p=0.95,
@@ -96,6 +95,7 @@ class Local(ModelProvider):
                 eos_token_id=151645, # <|im_end|>
                 use_cache=True,
                 return_dict_in_generate=True)
+            print("[INFO] Response generated.")
             output = self.tokenizer.text_tokenizer.decode(generation_output.sequences[:,(generation_output.context_hidden_states.shape[1] + 2 + input_ids.shape[1]):][0])
         else:
             generation_output = self.model.generate(
@@ -111,7 +111,7 @@ class Local(ModelProvider):
                 return_dict_in_generate=True)
 
             output = self.tokenizer.decode(generation_output.sequences[:,input_ids.shape[1]:][0])
-        print("[INFO] Response generated.")
+        print("[INFO] Response decoded.")
         return output
     
     def generate_prompt(self, context: str, retrieval_question: str) -> str | list[dict[str, str]]:
