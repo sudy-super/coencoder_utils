@@ -99,7 +99,7 @@ class Local(ModelProvider):
             generation_output = self.model.generate(
                 input_ids,
                 max_new_tokens=MAX_GEN_LENGTH,
-                do_sample=True,
+                # do_sample=True,
                 temperature=0.7,
                 top_k=50,
                 top_p=0.95,
