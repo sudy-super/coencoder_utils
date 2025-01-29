@@ -157,7 +157,7 @@ You are a helpful AI bot that answers questions for a user. Keep your response s
         Returns:
             str: The decoded text string.
         """
-        return self.tokenizer.decode(tokens[:context_length])
+        return self.tokenizer.context_tokenizer.decode(tokens[:context_length])
     
     def get_langchain_runnable(self, context: str) -> str:
         """
