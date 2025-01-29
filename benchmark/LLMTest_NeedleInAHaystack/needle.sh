@@ -1,4 +1,4 @@
-python LLMTest_NeedleInAHaystack/needlehaystack/run.py \
+needlehaystack.run_test \
     --provider local \
     --evaluator openai \
     --model_name "Qwen/Qwen2.5-7B-Instruct" \
@@ -7,4 +7,4 @@ python LLMTest_NeedleInAHaystack/needlehaystack/run.py \
     --context_lengths_max 131000 \
     --context_lengths_num_intervals 27 \
     --document_depth_percent_intervals 27 \
-    --seconds_to_sleep_between_completions 1 \
+    --seconds_to_sleep_between_completions 0.5 \

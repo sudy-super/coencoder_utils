@@ -66,7 +66,7 @@ class Local(ModelProvider):
         Returns:
             str: The content of the model's response to the prompt.
         """
-        MAX_GEN_LENGTH = 4096
+        MAX_GEN_LENGTH = 256
         tokenized_prompts = self.tokenizer(prompt, return_tensors="pt")
         input_ids = tokenized_prompts.input_ids.cuda()
 
