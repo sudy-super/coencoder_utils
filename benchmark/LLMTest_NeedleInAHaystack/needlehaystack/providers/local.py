@@ -137,7 +137,7 @@ You are a helpful AI bot that answers questions for a user. Keep your response s
         Returns:
             list[int]: A list of token IDs representing the encoded text.
         """
-        return self.tokenizer.encode(text)
+        return self.tokenizer.context_tokenizer.encode(text)
     
     def decode_tokens(self, tokens: list[int], context_length: Optional[int] = None) -> str:
         """
