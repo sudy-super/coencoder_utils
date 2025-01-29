@@ -67,7 +67,7 @@ class Local(ModelProvider):
             str: The content of the model's response to the prompt.
         """
         MAX_GEN_LENGTH = 512
-        if self.model_or_path == "sudy-super/C-cubed-8B-128k":
+        if self.model_or_path == "sudy-super/c_cubed_phase1":
             self.tokenizer.text_tokenizer.pad_token = self.tokenizer.text_tokenizer.eos_token
             self.tokenizer.context_tokenizer.pad_token = self.tokenizer.context_tokenizer.eos_token
             self.tokenizer.text_tokenizer.pad_token_id = self.tokenizer.text_tokenizer.eos_token_id
@@ -81,7 +81,7 @@ class Local(ModelProvider):
             tokenized_prompts = self.tokenizer(prompt, return_tensors="pt", add_special_tokens=False, padding=False)
             input_ids = tokenized_prompts.input_ids.cuda()
 
-        if self.model_or_path == "sudy-super/C-cubed-8B-128k":
+        if self.model_or_path == "sudy-super/c_cubed_phase1":
             generation_output = self.model.generate(
                 context_input_ids=context_input_ids,
                 input_ids=input_ids,
