@@ -86,7 +86,7 @@ class Local(ModelProvider):
                 context_input_ids=context_input_ids,
                 input_ids=input_ids,
                 max_new_tokens=MAX_GEN_LENGTH,
-                do_sample=True,
+                do_sample=False,
                 # temperature=0.7,
                 num_beams=5,
                 top_k=50,
