@@ -86,7 +86,7 @@ class Local(ModelProvider):
                 context_input_ids=context_input_ids,
                 input_ids=input_ids,
                 max_new_tokens=MAX_GEN_LENGTH,
-                do_sample=True,
+                # do_sample=True,
                 temperature=0.7,
                 top_k=50,
                 top_p=0.95,
