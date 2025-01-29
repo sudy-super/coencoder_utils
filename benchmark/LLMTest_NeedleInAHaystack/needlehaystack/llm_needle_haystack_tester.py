@@ -241,7 +241,7 @@ class LLMNeedleHaystackTester:
 
         # Insert your random statement according to your depth percent
         context = self.insert_needle(context, depth_percent, context_length)
-        print("[INFO] Needle inserted
+        print("[INFO] Needle inserted")
 
         return context
     
