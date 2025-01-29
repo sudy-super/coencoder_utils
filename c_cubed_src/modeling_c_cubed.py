@@ -708,14 +708,14 @@ class CcubedForConditionalGeneration(CcubedPreTrainedModel):
             attentions=outputs.attentions,
             context_hidden_states=context_features,
         )
-
+    
     def prepare_inputs_for_generation(
         self,
         input_ids,
+        inputs_embeds=None,
         past_key_values=None,
         attention_mask=None,
-        inputs_embeds=None,
-        context_features=None,
+        context_attention_mask=None,
         **kwargs
     ):
         if past_key_values:
@@ -727,12 +727,10 @@ class CcubedForConditionalGeneration(CcubedPreTrainedModel):
         else:
             model_inputs = {"input_ids": input_ids}
 
-        model_inputs.update(
-            {
-                "past_key_values": past_key_values,
-                "use_cache": kwargs.get("use_cache"),
-                "attention_mask": attention_mask,
-                "context_features": context_features,
-            }
-        )
+        model_inputs.update({
+            "past_key_values": past_key_values,
+            "use_cache": kwargs.get("use_cache"),
+            "attention_mask": attention_mask,
+            "context_attention_mask": context_attention_mask
+        })
         return model_inputs

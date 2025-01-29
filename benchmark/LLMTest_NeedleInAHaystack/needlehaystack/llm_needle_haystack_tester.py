@@ -147,13 +147,11 @@ class LLMNeedleHaystackTester:
 
         # Prepare your message to send to the model you're going to evaluate
         prompt = self.model_to_test.generate_prompt(context, self.retrieval_question)
-        print("[INFO] Prompt generated")
 
         test_start_time = time.time()
 
         # Go see if the model can answer the question to pull out your random fact
         response = await self.model_to_test.evaluate_model(prompt)
-        print("[INFO] Model evaluated")
 
         test_end_time = time.time()
         test_elapsed_time = test_end_time - test_start_time
