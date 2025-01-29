@@ -68,12 +68,12 @@ class Local(ModelProvider):
         """
         MAX_GEN_LENGTH = 512
         if self.model_or_path == "sudy-super/C-cubed-8B-128k":
-            tokenized_prompts = self.tokenizer.context_tokenizer(prompt["context"], return_tensors="pt", add_special_tokens=False)
+            tokenized_prompts = self.tokenizer.context_tokenizer(prompt["context"], return_tensors="pt", add_special_tokens=False, padding=False)
             context_input_ids = tokenized_prompts.input_ids.cuda()
-            tokenized_prompts = self.tokenizer.text_tokenizer(prompt["text"], return_tensors="pt", add_special_tokens=False)
+            tokenized_prompts = self.tokenizer.text_tokenizer(prompt["text"], return_tensors="pt", add_special_tokens=False, padding=False)
             input_ids = tokenized_prompts.input_ids.cuda()
         else:
-            tokenized_prompts = self.tokenizer(prompt, return_tensors="pt", add_special_tokens=False)
+            tokenized_prompts = self.tokenizer(prompt, return_tensors="pt", add_special_tokens=False, padding=False)
             input_ids = tokenized_prompts.input_ids.cuda()
 
         if self.model_or_path == "sudy-super/C-cubed-8B-128k":
