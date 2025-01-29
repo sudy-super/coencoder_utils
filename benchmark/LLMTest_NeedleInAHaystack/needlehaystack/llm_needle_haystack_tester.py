@@ -144,6 +144,7 @@ class LLMNeedleHaystackTester:
 
         # Go generate the required length context and place your needle statement in
         context = await self.generate_context(context_length, depth_percent)
+        print("[INFO] Context generated")
 
         # Prepare your message to send to the model you're going to evaluate
         prompt = self.model_to_test.generate_prompt(context, self.retrieval_question)
@@ -232,12 +233,15 @@ class LLMNeedleHaystackTester:
 
         # Get your haystack dir files loaded into a string
         context = self.read_context_files()
+        print("[INFO] Context read")
 
         # Truncate the haystack dir essays to the context length you desire
         context = self.encode_and_trim(context, context_length)
+        print("[INFO] Context trimmed")
 
         # Insert your random statement according to your depth percent
         context = self.insert_needle(context, depth_percent, context_length)
+        print("[INFO] Needle inserted
 
         return context
     
