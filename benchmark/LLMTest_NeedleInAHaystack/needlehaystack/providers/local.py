@@ -109,7 +109,6 @@ class Local(ModelProvider):
                 return_dict_in_generate=True)
 
             output = self.tokenizer.decode(generation_output.sequences[:,input_ids.shape[1]:][0])
-        print("[INFO] Response decoded.")
         return output
     
     def generate_prompt(self, context: str, retrieval_question: str) -> str | list[dict[str, str]]:
