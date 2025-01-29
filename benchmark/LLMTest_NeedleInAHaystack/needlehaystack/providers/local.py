@@ -81,7 +81,6 @@ class Local(ModelProvider):
             tokenized_prompts = self.tokenizer(prompt, return_tensors="pt", add_special_tokens=False, padding=False)
             input_ids = tokenized_prompts.input_ids.cuda()
 
-        print("[INFO] Generating response...")
         if self.model_or_path == "sudy-super/C-cubed-8B-128k":
             generation_output = self.model.generate(
                 context_input_ids=context_input_ids,
@@ -95,8 +94,7 @@ class Local(ModelProvider):
                 eos_token_id=151645, # <|im_end|>
                 use_cache=True,
                 return_dict_in_generate=True)
-            print("[INFO] Response generated.")
-            output = self.tokenizer.text_tokenizer.decode(generation_output.sequences[:,(generation_output.context_hidden_states.shape[1] + 2 + input_ids.shape[1]):][0])
+            output = self.tokenizer.text_tokenizer.decode(generation_output.sequences[:,input_ids.shape[1]:][0])
         else:
             generation_output = self.model.generate(
                 input_ids,
