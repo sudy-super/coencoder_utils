@@ -87,10 +87,10 @@ class Local(ModelProvider):
                 input_ids=input_ids,
                 max_new_tokens=MAX_GEN_LENGTH,
                 do_sample=True,
-                temperature=0.3,
+                temperature=0.9,
                 top_k=50,
                 top_p=0.95,
-                repetition_penalty=1.1,
+                repetition_penalty=1.0,
                 eos_token_id=151645, # <|im_end|>
                 use_cache=True,
                 return_dict_in_generate=True)
