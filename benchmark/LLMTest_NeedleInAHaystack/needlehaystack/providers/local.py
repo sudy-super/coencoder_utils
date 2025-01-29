@@ -81,6 +81,7 @@ class Local(ModelProvider):
             tokenized_prompts = self.tokenizer(prompt, return_tensors="pt", add_special_tokens=False, padding=False)
             input_ids = tokenized_prompts.input_ids.cuda()
 
+        print("[INFO] Generating response...")
         if self.model_or_path == "sudy-super/C-cubed-8B-128k":
             generation_output = self.model.generate(
                 context_input_ids=context_input_ids,
@@ -109,6 +110,7 @@ class Local(ModelProvider):
                 return_dict_in_generate=True)
 
             output = self.tokenizer.decode(generation_output.sequences[:,input_ids.shape[1]:][0])
+        print("[INFO] Response generated.")
         return output
     
     def generate_prompt(self, context: str, retrieval_question: str) -> str | list[dict[str, str]]:
