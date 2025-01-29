@@ -56,7 +56,7 @@ class Local(ModelProvider):
  
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_or_path, trust_remote_code=True)
     
-    async def evaluate_model(self, prompt: str) -> str:
+    async def evaluate_model(self, prompt):
         """
         Evaluates a given prompt using the OpenAI model and retrieves the model's response.
 
@@ -67,21 +67,41 @@ class Local(ModelProvider):
             str: The content of the model's response to the prompt.
         """
         MAX_GEN_LENGTH = 512
-        tokenized_prompts = self.tokenizer(prompt, return_tensors="pt")
-        input_ids = tokenized_prompts.input_ids.cuda()
+        if self.model_or_path == "sudy-super/C-cubed-8B-128k":
+            tokenized_prompts = self.tokenizer.context_tokenizer(prompt["context"], return_tensors="pt", add_special_tokens=False)
+            context_input_ids = tokenized_prompts.input_ids.cuda()
+            tokenized_prompts = self.tokenizer.text_tokenizer(prompt["text"], return_tensors="pt", add_special_tokens=False)
+            input_ids = tokenized_prompts.input_ids.cuda()
+        else:
+            tokenized_prompts = self.tokenizer(prompt, return_tensors="pt", add_special_tokens=False)
+            input_ids = tokenized_prompts.input_ids.cuda()
 
-        generation_output = self.model.generate(
-            input_ids,
-            max_new_tokens=MAX_GEN_LENGTH,
-            temperature=0.7,
-            top_k=50,
-            top_p=0.95,
-            repetition_penalty=1.1,
-            eos_token_id=151645, # <|im_end|>
-            use_cache=True,
-            return_dict_in_generate=True)
+        if self.model_or_path == "sudy-super/C-cubed-8B-128k":
+            generation_output = self.model.generate(
+                context_input_ids=context_input_ids,
+                input_ids=input_ids,
+                max_new_tokens=MAX_GEN_LENGTH,
+                temperature=0.7,
+                top_k=50,
+                top_p=0.95,
+                repetition_penalty=1.1,
+                eos_token_id=151645, # <|im_end|>
+                use_cache=True,
+                return_dict_in_generate=True)
+            output = self.tokenizer.text_tokenizer.decode(generation_output.sequences[:,(generation_output.context_hidden_states.shape[1] + 2 + input_ids.shape[1]):][0])
+        else:
+            generation_output = self.model.generate(
+                input_ids,
+                max_new_tokens=MAX_GEN_LENGTH,
+                temperature=0.7,
+                top_k=50,
+                top_p=0.95,
+                repetition_penalty=1.1,
+                eos_token_id=151645, # <|im_end|>
+                use_cache=True,
+                return_dict_in_generate=True)
 
-        output = self.tokenizer.decode(generation_output.sequences[:,input_ids.shape[1]:][0])
+            output = self.tokenizer.decode(generation_output.sequences[:,input_ids.shape[1]:][0])
         return output
     
     def generate_prompt(self, context: str, retrieval_question: str) -> str | list[dict[str, str]]:
@@ -95,7 +115,7 @@ class Local(ModelProvider):
         Returns:
             list[dict[str, str]]: A list of dictionaries representing the structured prompt, including roles and content for system and user messages.
         """
-        return f"""<|im_start|>system
+        query =  f"""<|im_start|>system
 You are a helpful AI bot that answers questions for a user. Keep your response short and direct<|im_end|>
 <|im_start|>user
 {context}
@@ -103,6 +123,9 @@ You are a helpful AI bot that answers questions for a user. Keep your response s
 {retrieval_question} Don't give information outside the document or repeat your findings<|im_end|>
 <|im_start|>assistant
 """
+        query = {"context": context, "text": f"<|im_start|>system\nYou are a helpful AI bot that answers questions for a user. Keep your response short and direct<|im_end|>\n<|im_start|>user\n{retrieval_question} Don't give information outside the document or repeat your findings<|im_end|>\n<|im_start|>assistant\n"}
+
+        return query
     
     def encode_text_to_tokens(self, text: str) -> list[int]:
         """
