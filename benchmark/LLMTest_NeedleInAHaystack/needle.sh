@@ -7,4 +7,3 @@ needlehaystack.run_test \
     --context_lengths_max 131000 \
     --context_lengths_num_intervals 20 \
     --document_depth_percent_intervals 20 \
-    --seconds_to_sleep_between_completions 0.5 \
